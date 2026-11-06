@@ -42,7 +42,6 @@ interface AppContextType extends AppState {
   toggleChkAll: (ids: string[]) => void;
   toggleTaskDone: (id: string) => void;
   addAssets: (assets: Asset[]) => void;
-  clearAssets: () => void;
   removeAssetsByIds: (ids: string[]) => void;
   getAsset: (id: string) => Asset | undefined;
   getComprador: (id: string) => Comprador | undefined;
@@ -317,10 +316,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const clearAssets = useCallback(() => {
-    setState(prev => ({ ...prev, assets: [] }));
-  }, []);
-
   const removeAssetsByIds = useCallback((ids: string[]) => {
     if (ids.length === 0) return;
     const drop = new Set(ids);
@@ -349,7 +344,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       assignedAssetIds,
       assignedCompradorIds,
       togglePub, toggleFav, toggleChk, toggleChkAll, toggleTaskDone,
-      addAssets, clearAssets, removeAssetsByIds, getAsset, getComprador, getVendedor,
+      addAssets, removeAssetsByIds, getAsset, getComprador, getVendedor,
       refreshAssignments, refreshAssets, refreshCompradores, refreshVendedores,
     }}>
       {children}

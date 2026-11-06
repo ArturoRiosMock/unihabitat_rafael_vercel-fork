@@ -2,7 +2,7 @@
 
 > **Propósito:** Referência das server actions por entidade.  
 > **Público:** Desenvolvedores.  
-> **Última verificação:** 2026-06-12
+> **Última verificação:** 2026-11-06
 
 Todas em `src/app/actions/`. Padrão: `"use server"`, auth via `auth-server.ts`, writes com `createServiceClient()`.
 
@@ -23,7 +23,7 @@ Todas em `src/app/actions/`. Padrão: `"use server"`, auth via `auth-server.ts`,
 | `toggleAssetPub` | Publicar/despublicar |
 | `updateAssetFields` | Edição parcial |
 | `updatePropiedadExcelRaw` | Actualizar excel raw |
-| `deleteAllAssets` / `deleteAssetsByIds` | Eliminação |
+| `deleteAssetsByIds` | Eliminação dos imóveis seleccionados (por IDs). Não existe eliminação de todos os activos. |
 | `toggleAssetFav` | Favorito admin |
 
 ## Compradores
