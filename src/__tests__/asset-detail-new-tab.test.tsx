@@ -88,7 +88,6 @@ const mocks = vi.hoisted(() => {
     toggleChk: vi.fn(),
     toggleFav: vi.fn(),
     toggleChkAll: vi.fn(),
-    clearAssets: vi.fn(),
     removeAssetsByIds: vi.fn(),
     toggleAssetPub: vi.fn(async (_id: string) => undefined),
     session: { role: "admin", nombre: "Admin", email: "admin@test" },
@@ -102,14 +101,12 @@ vi.mock("@/lib/context", () => ({
     toggleChk: mocks.toggleChk,
     toggleChkAll: mocks.toggleChkAll,
     session: mocks.session,
-    clearAssets: mocks.clearAssets,
     removeAssetsByIds: mocks.removeAssetsByIds,
     refreshAssets: vi.fn(),
   }),
 }));
 
 vi.mock("@/app/actions/assets", () => ({
-  deleteAllAssets: vi.fn(),
   deleteAssetsByIds: vi.fn(),
   toggleAssetPub: (id: string) => mocks.toggleAssetPub(id),
 }));
@@ -204,11 +201,12 @@ describe("listado admin de activos abre la ficha en otra pestaña", () => {
     expect(screen.getByRole("link", { name: /MAYOR/i })).toHaveAttribute("target", "_blank");
   });
 
-  it("mantiene borrar seleccionados y borrar todos para admin, y la ficha nueva para el agente", () => {
+  it("mantiene borrar seleccionados, sin Borrar todos, y la ficha nueva para el agente", () => {
     const { rerender } = render(<ActivosPage />);
 
     expect(screen.getByRole("button", { name: /Borrar seleccionados/i })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /^Borrar todos$/i })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: /Borrar todos/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /MAYOR/i })).toHaveAttribute("target", "_blank");
 
     mocks.session.role = "vendedor";
     rerender(<ActivosPage />);
@@ -245,13 +243,14 @@ describe("otros listados que pierden filtros al navegar", () => {
     expect(map).toContain("Ver ficha →");
   });
 
-  it("no cambia el borrado selectivo ni Borrar todos en el listado admin", () => {
+  it("conserva el borrado selectivo y no recupera Borrar todos", () => {
     const src = readSrc("app/admin/page.tsx");
     expect(src).toContain("handleDeleteSelected");
     expect(src).toContain("deleteAssetsByIds");
     expect(src).toContain("Borrar seleccionados");
-    expect(src).toContain("handleDeleteAll");
-    expect(src).toContain("deleteAllAssets");
-    expect(src).toContain("Borrar todos");
+    expect(src).toContain('target="_blank"');
+    expect(src).not.toContain("handleDeleteAll");
+    expect(src).not.toContain("deleteAllAssets");
+    expect(src).not.toContain("Borrar todos");
   });
 });
