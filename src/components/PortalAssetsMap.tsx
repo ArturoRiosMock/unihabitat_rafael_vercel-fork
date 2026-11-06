@@ -73,7 +73,7 @@ export function PortalAssetsMap({ assets, className = "" }: PortalAssetsMapProps
             `<div style="font:12px/1.4 system-ui,sans-serif;min-width:140px">
               <strong>${escapeHtml(shortAddr(p.asset) || p.asset.pob || p.asset.id)}</strong><br/>
               <span style="color:#666">${escapeHtml(price.label)}: ${escapeHtml(price.value)}</span><br/>
-              <a href="${assetPortalHref(p.asset)}" style="color:#0d2a4a;font-weight:600">Ver ficha →</a>
+              <a href="${assetPortalHref(p.asset)}" target="_blank" rel="noopener noreferrer" title="Se abre en una pestaña nueva" style="color:#0d2a4a;font-weight:600">Ver ficha →</a>
             </div>`,
           );
           bounds.extend([p.lat, p.lng]);

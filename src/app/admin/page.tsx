@@ -358,6 +358,8 @@ export default function ActivosPage() {
               <Link
                 key={a.id}
                 href={`/admin/assets/${a.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="grid grid-cols-[32px_28px_72px_100px_100px_1fr_56px_56px_100px_minmax(6rem,1fr)_minmax(4.5rem,88px)_72px_90px_95px_28px] items-start gap-1.5 border-b border-border2 px-3.5 py-1.5 transition-colors last:border-b-0 hover:bg-cream/50 min-h-[46px]"
               >
                 <div
@@ -380,7 +382,10 @@ export default function ActivosPage() {
                 </span>
                 <span className="truncate text-xs">{a.prov}</span>
                 <span className="truncate text-xs">{a.pob}</span>
-                <span className="truncate text-xs text-muted">{displayAssetAddress(a)}</span>
+                <span className="truncate text-xs text-muted">
+                  {displayAssetAddress(a)}
+                  <span className="sr-only"> (se abre en una pestaña nueva)</span>
+                </span>
                 <span className="font-mono text-[11px] text-muted">{a.cp}</span>
                 <span className="text-xs text-muted">{fmtM(a.sqm)}</span>
                 <span className={`inline-flex w-fit rounded-md px-2 py-0.5 text-[10px] font-semibold ${pillClass[a.tipC] || ""}`}>{a.tip}</span>

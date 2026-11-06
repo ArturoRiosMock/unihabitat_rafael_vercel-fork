@@ -433,6 +433,8 @@ function PortalContent() {
             <Link
               key={a.id}
               href={assetPortalHref(a)}
+              target="_blank"
+              rel="noopener noreferrer"
               className="group overflow-hidden rounded-xl border border-border bg-white shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5"
             >
               {/* Image + badges */}
@@ -495,7 +497,10 @@ function PortalContent() {
                   <span className="truncate">{a.pob}, {a.prov}</span>
                   {a.cp && <span className="shrink-0 text-border">· {a.cp}</span>}
                 </div>
-                <h3 className="truncate text-sm font-semibold text-navy">{shortAddr(a)}</h3>
+                <h3 className="truncate text-sm font-semibold text-navy">
+                  {shortAddr(a)}
+                  <span className="sr-only"> (se abre en una pestaña nueva)</span>
+                </h3>
 
                 {/* Details row */}
                 <div className="mt-2.5 flex items-center gap-3 text-[11px] text-muted">
