@@ -2,13 +2,15 @@
 
 > **Propósito:** Operações na ficha e lista de imóveis no admin.  
 > **Público:** Operação / admin.  
-> **Última verificação:** 2026-06-12
+> **Última verificação:** 2026-11-06
 
 ## Lista `/admin`
 
 - Filtrar e pesquisar activos
+- Clicar numa linha abre a ficha `/admin/assets/[id]` **noutra aba** (`target="_blank"`, `rel="noopener noreferrer"`). Filtros, pesquisa, ordenação, página e favoritos ficam no separador do listado — vivem em estado React e perdem-se se a página desmontar.
+- O mesmo critério aplica-se ao catálogo `/portal` (pesquisa, ordenação, página e vista lista/mapa não vão na URL) e ao título do activo em `/admin/ofertas` (filtro de estado). Categoria, província, população e tipologia do portal já persistem na query string.
 - Upload Excel — ver [admin-importar-excel.md](admin-importar-excel.md)
-- Eliminar em massa (seleccionados)
+- Eliminar os activos seleccionados (só admin). Não há «Borrar todos».
 - Toggle favorito admin
 
 ## Publicar no portal

@@ -263,9 +263,12 @@ function OfertasPageInner() {
                       <div className="ml-12">
                         <Link
                           href={`/admin/assets/${asset.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="text-sm font-medium text-navy hover:underline"
                         >
                           {asset.pob}, {asset.prov} — {asset.id}
+                          <span className="sr-only"> (se abre en una pestaña nueva)</span>
                         </Link>
                         <div className="mt-1 flex items-center gap-4 text-xs text-muted">
                           <span>Tipo: {asset.tip}</span>
