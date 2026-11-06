@@ -677,15 +677,6 @@ export async function updatePropiedadExcelRaw(
   if (error) throw new Error(error.message);
 }
 
-export async function deleteAllAssets(): Promise<{ deleted: number }> {
-  await requireAdmin();
-  const supabase = await createServiceClient();
-  const { data, error } = await supabase
-    .from("assets").delete().neq("id", "").select("id");
-  if (error) throw new Error(error.message);
-  return { deleted: data?.length ?? 0 };
-}
-
 export async function deleteAssetsByIds(ids: string[]): Promise<{ deleted: number }> {
   await requireAdmin();
   const unique = [...new Set(ids.filter(Boolean))];

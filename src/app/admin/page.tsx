@@ -12,7 +12,7 @@ import type { Asset } from "@/lib/types";
 import { Search, Star, X, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Plus, Check, Trash2 } from "lucide-react";
 import { UploadActivosModal } from "./UploadActivosModal";
 import { FilterSelect } from "@/components/FilterSelect";
-import { deleteAllAssets, deleteAssetsByIds, toggleAssetPub } from "@/app/actions/assets";
+import { deleteAssetsByIds, toggleAssetPub } from "@/app/actions/assets";
 import { isAdmin } from "@/lib/auth-helpers";
 import { getCategoria, getFaseInterna, getFaseC, getActivoId } from "@/lib/utils";
 import { toast } from "@/lib/toast";
@@ -39,7 +39,7 @@ const pillClass: Record<string, string> = {
 };
 
 export default function ActivosPage() {
-  const { assets, toggleFav, toggleChk, toggleChkAll, session, clearAssets, removeAssetsByIds } = useApp();
+  const { assets, toggleFav, toggleChk, toggleChkAll, session, removeAssetsByIds } = useApp();
   const userIsAdmin = isAdmin(session);
 
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -160,21 +160,6 @@ export default function ActivosPage() {
     setQ(""); setFCat(""); setFProv(""); setFPob(""); setFTipo(""); setFEstado("");
     setFFase(""); setFProceso(""); setFDeuda("");
     if (favOnly) setFavOnly(false);
-  };
-
-  const handleDeleteAll = async () => {
-    if (!window.confirm("¿Estás seguro de que deseas BORRAR TODOS los activos?\n\nEsta acción es irreversible y eliminará también mensajes, notas, documentos y oportunidades asociados.")) return;
-    if (!window.confirm("CONFIRMACIÓN FINAL: Se borrarán " + assets.length + " activos y todos sus datos asociados.\n\n¿Continuar?")) return;
-    setDeleting(true);
-    try {
-      const { deleted } = await deleteAllAssets();
-      clearAssets();
-      toast.success("Activos eliminados", { description: `${deleted} activo(s) eliminados correctamente.` });
-    } catch (err) {
-      toast.error("Error al borrar todos los activos", { description: err instanceof Error ? err.message : String(err) });
-    } finally {
-      setDeleting(false);
-    }
   };
 
   const selectedInFiltered = useMemo(() => filtered.filter(a => a.chk).map(a => a.id), [filtered]);
@@ -321,14 +306,6 @@ export default function ActivosPage() {
                   className="flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-medium text-red-600 transition-colors hover:bg-red-100 disabled:opacity-40"
                 >
                   <Trash2 size={12} /> Borrar seleccionados{selectedCount > 0 ? ` (${selectedCount})` : ""}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDeleteAll}
-                  disabled={deleting || assets.length === 0}
-                  className="flex items-center gap-1.5 rounded-md border border-red-300 bg-white px-2.5 py-1 text-[11px] font-medium text-red-700 transition-colors hover:bg-red-50 disabled:opacity-40"
-                >
-                  <Trash2 size={12} /> Borrar todos
                 </button>
               </>
             )}
