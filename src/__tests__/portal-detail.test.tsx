@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import PortalDetailClient from "@/app/portal/[id]/PortalDetailClient";
 import type { Asset } from "@/lib/types";
+import { displaySituacion } from "@/lib/utils";
 
 // Tests del *cliente*: el guardado server-side ya está cubierto por
 // `actions-assets.test.ts`; aquí confirmamos que cuando el server delega un
@@ -73,6 +74,21 @@ describe("PortalDetailClient", () => {
     expect(screen.getAllByText(/Descripción/i).length).toBeGreaterThan(0);
     // Botón "Solicitar información" — anclado al panel lateral.
     expect(screen.getAllByText(/Solicitar información/i).length).toBeGreaterThan(0);
+  });
+
+  it("muestra Situación en Características y un guion si está vacía", () => {
+    const { rerender } = render(<PortalDetailClient asset={makeAsset()} siblings={[]} />);
+    const section = document.getElementById("caracteristicas");
+    expect(section).not.toBeNull();
+    const filled = within(section as HTMLElement).getByText("Situación").parentElement;
+    expect(filled).toHaveTextContent("Publicado");
+
+    const empty = makeAsset();
+    empty.propiedades = [{ ...empty.propiedades[0], faseInterna: "   " }];
+    rerender(<PortalDetailClient asset={empty} siblings={[]} />);
+    const blank = within(document.getElementById("caracteristicas") as HTMLElement).getByText("Situación").parentElement;
+    expect(blank).toHaveTextContent("—");
+    expect(displaySituacion(empty)).toBe("—");
   });
 
   it("muestra la sección de colaterales cuando hay siblings", () => {

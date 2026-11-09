@@ -167,7 +167,7 @@ const CORE_HEADERS = {
   mail: ["mail", "Mail", "Email", "E-mail"],
   publicar: ["Publicar"],
   categoria: ["Categoria", "Categoría"],
-  faseInterna: ["Fase Interna"],
+  faseInterna: ["Fase Interna", "Situación", "Situacion"],
   proceso: ["Proceso"],
   referencia: ["Referencia", "Referencia Catastral", "ReferenciaCatastral"],
   clase: ["Clase"],

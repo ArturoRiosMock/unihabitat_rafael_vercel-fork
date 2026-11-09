@@ -23,6 +23,17 @@ export function getCategoria(a: AssetLike): string {
 export function getFaseInterna(a: AssetLike): string {
   return a.propiedades?.[0]?.faseInterna ?? "—";
 }
+
+/**
+ * Situación visible en la ficha. Es la fase interna de la primera propiedad
+ * (`propiedades.fase_interna`): columna Excel «Fase Interna» (alias «Situación»)
+ * y columna «Situación» del export. Vacío, espacios o guion → "—".
+ */
+export function displaySituacion(a: AssetLike): string {
+  const raw = getFaseInterna(a).trim();
+  if (!raw || raw === "—" || raw === "-" || raw === "–") return "—";
+  return raw;
+}
 /** Código de fase (para badges). */
 export function getFaseC(a: AssetLike): string {
   return a.propiedades?.[0]?.faseC ?? "fp-nd";

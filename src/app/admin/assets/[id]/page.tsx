@@ -20,6 +20,7 @@ import { getAssetAgente, setAssetAgente } from "@/app/actions/vendedores";
 import type { Comprador } from "@/lib/types";
 import { InteractiveMap } from "@/components/InteractiveMap";
 import { EditableSection, type FieldDef } from "@/components/EditableSection";
+import { SituacionField } from "@/components/SituacionField";
 import { EditableExcelRawSection } from "@/components/EditableExcelRawSection";
 import { listEmptyExcelFields } from "@/lib/excel-raw-utils";
 import { FASE_INTERNA_OPTIONS, faseToCode } from "@/lib/fase-interna";
@@ -318,6 +319,7 @@ function DocItemRow({ doc, onDelete }: { doc: DocRow; onDelete?: () => void }) {
 function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset, canDeleteNotes }: { asset: Asset; assetId: string; currentUser: { nombre: string; email: string } | null; reloadAsset: () => void; canDeleteNotes: boolean }) {
   const { compradores, session } = useApp();
   const isAgente = session?.role === "vendedor";
+  const canEditSituacion = isAdmin(session);
   const [generalNote, setGeneralNote] = useState("");
   const [assetNotesList, setAssetNotesList] = useState<NotaRow[]>([]);
   const [saving, setSaving] = useState(false);
@@ -592,6 +594,7 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset, canDelet
           )}
           <div className="flex flex-col gap-2">
             <EditableSection title="Precio" assetId={assetId} fields={precioFields} cols={1} onSaved={reloadAsset} />
+            <SituacionField asset={asset} canEdit={canEditSituacion} onSaved={reloadAsset} />
             {(getDeudaTotal(asset) != null || asset.propiedades[0]?.proceso) && (
               <div className="rounded-lg border border-border bg-cream2 px-3 py-2 text-xs text-text">
                 {getDeudaTotal(asset) != null && (
