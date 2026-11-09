@@ -13,6 +13,7 @@ import {
 } from "@/lib/auth-server";
 import { buildPublicSlug } from "@/lib/public-slug";
 import { isMissingPublishedAtColumn } from "@/lib/asset-publication";
+import { propiedadPatchFromExcelRaw } from "@/lib/propiedad-canonical";
 
 // PostgREST aplica `db-max-rows = 1000` por request; paginamos manualmente.
 const POSTGREST_PAGE_SIZE = 1000;
@@ -672,17 +673,21 @@ function validateExcelRawPayload(obj: unknown): Record<string, Record<string, st
   return out;
 }
 
-/** Actualiza el excel_raw de una propiedad (lien). En el nuevo modelo el blob
- *  de Excel vive a nivel propiedad, no inmueble. */
+/** Actualiza el excel_raw de una propiedad y proyecta Deuda y Proceso a las
+ *  columnas `deuda` y `proceso`. Esas columnas son las que leen Características,
+ *  el listado, el portal y la descarga Excel. */
 export async function updatePropiedadExcelRaw(
   propiedadId: string,
   excelRaw: Record<string, Record<string, string>>,
 ): Promise<void> {
   await requireAdmin();
   const validated = validateExcelRawPayload(excelRaw);
+  const canonical = propiedadPatchFromExcelRaw(validated);
   const supabase = await createServiceClient();
   const { error } = await supabase
-    .from("propiedades").update({ excel_raw: validated }).eq("id", propiedadId);
+    .from("propiedades")
+    .update({ excel_raw: validated, ...canonical })
+    .eq("id", propiedadId);
   if (error) throw new Error(error.message);
 }
 

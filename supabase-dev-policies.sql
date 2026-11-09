@@ -29,11 +29,11 @@ create policy "tareas_anon_update" on public.tareas for update using (true);
 create policy "mensajes_anon_select" on public.mensajes for select using (true);
 create policy "mensajes_anon_insert" on public.mensajes for insert with check (true);
 
--- Notas: en dev se puede leer e insertar sin sesión.
+-- Notas: no hay SELECT ni INSERT anónimo. La visibilidad la fijan
+-- notas_agente_select / notas_comprador_select / notas_admin
+-- (supabase/migrations/20261109_notas_select_visibilidad.sql).
 -- No hay DELETE anónimo. Borrar una nota es solo admin
 -- (política notas_admin_delete + server action deleteNota).
-create policy "notas_anon_select" on public.notas for select using (true);
-create policy "notas_anon_insert" on public.notas for insert with check (true);
 
 -- Documentos
 create policy "documentos_anon_select" on public.documentos for select using (true);

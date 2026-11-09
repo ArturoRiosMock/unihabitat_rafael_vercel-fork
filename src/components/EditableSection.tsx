@@ -22,13 +22,18 @@ interface EditableSectionProps {
   fields: FieldDef[];
   cols?: number;
   onSaved?: () => void;
+  /**
+   * Persistencia. Por defecto actualiza `assets`. La ficha administrativa
+   * pasa `updatePropiedadFields` porque Deuda y Proceso viven en `propiedades`.
+   */
+  persist?: (id: string, patch: Record<string, string | number | null>) => Promise<void>;
 }
 
 const inputCls =
   "w-full rounded-md border border-border bg-cream2 px-2.5 py-[7px] text-xs text-text outline-none transition-all placeholder:text-muted/50 focus:border-navy focus:bg-white";
 const monoInputCls = inputCls + " font-mono text-[11px]";
 
-export function EditableSection({ title, assetId, fields, cols = 4, onSaved }: EditableSectionProps) {
+export function EditableSection({ title, assetId, fields, cols = 4, onSaved, persist }: EditableSectionProps) {
   const initial = useRef<Record<string, string>>({});
   const [values, setValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -89,7 +94,7 @@ export function EditableSection({ title, assetId, fields, cols = 4, onSaved }: E
         }
       }
       if (Object.keys(patch).length > 0) {
-        await updateAssetFields(assetId, patch);
+        await (persist ?? updateAssetFields)(assetId, patch);
         initial.current = { ...values };
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
@@ -110,8 +115,9 @@ export function EditableSection({ title, assetId, fields, cols = 4, onSaved }: E
       <div className={`grid gap-2`} style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
         {fields.map(f => (
           <div key={f.dbCol} className="flex flex-col gap-0.5" style={f.colSpan ? { gridColumn: `span ${f.colSpan}` } : undefined}>
-            <label className="text-[9px] font-semibold uppercase tracking-wider text-muted">{f.label}</label>
+            <label htmlFor={`field-${f.dbCol}`} className="text-[9px] font-semibold uppercase tracking-wider text-muted">{f.label}</label>
             <input
+              id={`field-${f.dbCol}`}
               value={values[f.dbCol] ?? ""}
               onChange={e => handleChange(f.dbCol, e.target.value)}
               placeholder="—"

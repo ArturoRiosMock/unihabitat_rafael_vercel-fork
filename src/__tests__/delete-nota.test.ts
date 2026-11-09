@@ -119,9 +119,9 @@ describe("política SQL de borrado de notas", () => {
     expect(migration).not.toMatch(/notas_vendedor_delete"\s+on public\.notas\s+for delete/i);
   });
 
-  it("las políticas de desarrollo no abren el DELETE de notas", () => {
+  it("las políticas de desarrollo no abren el SELECT ni el DELETE de notas", () => {
     expect(devPolicies).not.toContain("notas_anon_delete");
-    expect(devPolicies).toContain("notas_anon_select");
-    expect(devPolicies).toContain("notas_anon_insert");
+    expect(devPolicies).not.toContain("notas_anon_select");
+    expect(devPolicies).not.toContain("notas_anon_insert");
   });
 });

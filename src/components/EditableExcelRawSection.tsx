@@ -53,9 +53,8 @@ export function EditableExcelRawSection({
   const handleSave = async () => {
     setSaving(true);
     try {
-      // assetId aquí es en realidad el propiedadId (PK de la propiedad cuyo
-       // excel_raw se está editando). El call-site del admin pasa el id del
-       // inmueble por compatibilidad — TODO: refactor explícito a propiedadId.
+      // `assetId` es el id de la propiedad (PK). El guardado también copia
+      // Deuda y Proceso a las columnas canónicas de esa fila.
       await updatePropiedadExcelRaw(assetId, draft);
       initial.current = cloneRaw(draft);
       setSaved(true);
