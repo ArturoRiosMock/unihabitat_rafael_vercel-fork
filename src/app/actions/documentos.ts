@@ -93,8 +93,11 @@ export async function deleteDocumento(id: string): Promise<void> {
 
 export async function getDocumentUrl(storagePath: string): Promise<string> {
   const serviceClient = await createServiceClient();
-  const { data } = serviceClient.storage
+  const { data, error } = await serviceClient.storage
     .from("documentos")
-    .getPublicUrl(storagePath);
-  return data.publicUrl;
+    .createSignedUrl(storagePath, 3600);
+  if (error || !data?.signedUrl) {
+    throw new Error(error?.message ?? "Failed to generate signed URL");
+  }
+  return data.signedUrl;
 }

@@ -67,6 +67,7 @@ Campos que antes viviam em `asset.adm.*` devem ser lidos de `asset.propiedades[]
 | Oportunidade | `oportunidades` | Match com score |
 | Oferta | `ofertas` | Proposta + estados NDA |
 | Notificacion | `notificaciones` | Alertas in-app (+ email espelhado) |
+| Nota | `notas` | Nota de activo (ficha admin e «Mis notas» do portal). Sem tipo: a mesma linha aparece em várias secções. DELETE só admin |
 
 Tabelas de relação: `comprador_assets` (convites), `comprador_favoritos`, `vendedor_permissions`, `vendedor_assets`, `vendedor_compradores`.
 
@@ -88,7 +89,8 @@ Todo acesso DB passa por [`src/lib/supabase/db.ts`](../../src/lib/supabase/db.ts
 | `supabase-schema.sql` | Schema inicial (legacy parcial) |
 | `supabase-migration-inmuebles-propiedades.sql` | Separação Asset/Propiedad |
 | `supabase-migration-excel-raw.sql` | Coluna excel_raw |
-| `supabase-dev-policies.sql` | RLS permissivo para dev |
+| `supabase-dev-policies.sql` | RLS permissivo para dev (notas: select/insert; sem delete) |
+| `supabase/migrations/20261109_notas_admin_delete.sql` | Política DELETE de notas só admin |
 
 Ver [migrations-supabase.md](../operacoes/migrations-supabase.md).
 

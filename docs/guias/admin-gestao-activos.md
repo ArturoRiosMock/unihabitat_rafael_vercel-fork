@@ -51,6 +51,27 @@ Tab admin mostra propiedades ligadas — dados de devedor, dívida, fase judicia
 
 Upload documentos (Supabase Storage), notas internas, mensagens na ficha.
 
+**Descargar** (ficha `/admin/assets/[id]` → **Documentación**, admin e agente) abre uma URL firmada (`createSignedUrl`, 1 h). O bucket `documentos` é privado: não usar `getPublicUrl`. O mesmo vale para **Documentos** em `/portal/privado/inmueble/[slug]`.
+
+### Apagar uma nota (só admin)
+
+Na ficha `/admin/assets/[id]` — a lista chama-se **Propiedades** em `/admin` — o admin vê o botão **Borrar** em cada nota. Há confirmação (`¿Eliminar esta nota?`). A linha desaparece de `public.notas`.
+
+| Separador (menu esquerdo da ficha) | Secção exacta |
+|-------------------------------------|----------------|
+| Características | **Notas del activo** |
+| Documentación → subseparador **Notas** | **Notas y aclaraciones** |
+| Agentes | **Notas del agente** |
+| Administrador | **Notas privadas** |
+
+São a mesma tabela. Apagar numa secção tira a nota das outras.
+
+O agente vê notas em Características e Documentación, **sem** botão. Não apaga notas próprias nem alheias: antes também não podia, e fica assim. No portal, **Mis notas** (`/portal/privado/inmueble/[slug]`) não tem apagar — o comprador não apaga; o admin pode apagar essa mesma linha na ficha.
+
+Os comentários de uma oferta (`ofertas.comentarios`) não são notas e não se apagam aqui.
+
+SQL idempotente: [`supabase/migrations/20261109_notas_admin_delete.sql`](../../supabase/migrations/20261109_notas_admin_delete.sql). A action `deleteNota` exige rol admin e usa service role (o admin demo com cookie `dev-auth` pode não cumprir `is_admin()`).
+
 ## Ficheiros relacionados
 
 - [`src/app/admin/assets/[id]/page.tsx`](../../src/app/admin/assets/[id]/page.tsx)

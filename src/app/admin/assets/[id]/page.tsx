@@ -8,7 +8,8 @@ import type { Asset } from "@/lib/types";
 import { publicationListLabel } from "@/lib/asset-publication";
 import { Home, FolderOpen, Briefcase, Users, Lock, ArrowLeft, Upload, Download, FileText, FileSpreadsheet, Image, MessageSquare, Save, Plus, Mail, X, Loader2, AlertCircle, CheckCircle2, CheckCircle, Building, ExternalLink, RefreshCw, UserCog, Send, Link2 } from "lucide-react";
 import { uploadDocumento, fetchDocumentos, deleteDocumento, getDocumentUrl, type DocRow } from "@/app/actions/documentos";
-import { createNota, fetchNotas, type NotaRow } from "@/app/actions/notas";
+import { createNota, deleteNota, fetchNotas, type NotaRow } from "@/app/actions/notas";
+import { AssetNoteCard } from "@/components/AssetNoteCard";
 import { fetchCompradores } from "@/app/actions/compradores";
 import { fetchAssetByIdForAdmin, fetchAssetsByActivoIdForAdmin, toggleAssetPub, updateAssetFields, updatePropiedadFields } from "@/app/actions/assets";
 import { inviteCompradorToAsset, revokeCompradorFromAsset, fetchInvitedCompradores } from "@/app/actions/invitations";
@@ -193,11 +194,11 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto bg-cream p-6">
-          {tab === 0 && <TabCaracteristicas asset={asset} assetId={id} currentUser={currentUser} reloadAsset={loadRemote} />}
-          {tab === 1 && <TabDocumentacion assetId={id} docSubTab={docSubTab} setDocSubTab={setDocSubTab} currentUser={currentUser} />}
-          {tab === 2 && userIsAdmin && <TabAgentes asset={asset} assetId={id} currentUser={currentUser} />}
+          {tab === 0 && <TabCaracteristicas asset={asset} assetId={id} currentUser={currentUser} reloadAsset={loadRemote} canDeleteNotes={userIsAdmin} />}
+          {tab === 1 && <TabDocumentacion assetId={id} docSubTab={docSubTab} setDocSubTab={setDocSubTab} currentUser={currentUser} canDeleteNotes={userIsAdmin} />}
+          {tab === 2 && userIsAdmin && <TabAgentes asset={asset} assetId={id} currentUser={currentUser} canDeleteNotes={userIsAdmin} />}
           {tab === 3 && userIsAdmin && <TabClientes assetId={id} />}
-          {tab === 4 && userIsAdmin && <TabAdmin asset={asset} assetId={id} togglePub={() => void handleTogglePub()} currentUser={currentUser} reloadAsset={loadRemote} />}
+          {tab === 4 && userIsAdmin && <TabAdmin asset={asset} assetId={id} togglePub={() => void handleTogglePub()} currentUser={currentUser} reloadAsset={loadRemote} canDeleteNotes={userIsAdmin} />}
         </div>
       </div>
     </>
@@ -239,21 +240,16 @@ function DataPill({ label, value, mono }: { label: string; value: string; mono?:
   );
 }
 
-function NoteCard({ note }: { note: NotaRow }) {
-  const formatDate = (dateStr: string) => {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
-  };
-  const date = formatDate(note.created_at);
-  return (
-    <div className="rounded-lg border border-border bg-white p-3">
-      <div className="mb-1 flex items-center justify-between">
-        <span className="text-xs font-semibold text-navy">{note.author}</span>
-        <span className="text-[11px] text-muted">{date}</span>
-      </div>
-      <p className="text-sm leading-relaxed text-text">{note.text}</p>
-    </div>
-  );
+async function deleteAssetNote(noteId: string, reload: () => Promise<void>): Promise<void> {
+  try {
+    await deleteNota(noteId);
+    await reload();
+    toast.success("Nota eliminada");
+  } catch (err) {
+    toast.error("Error al eliminar la nota", {
+      description: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 function DocItemRow({ doc, onDelete }: { doc: DocRow; onDelete?: () => void }) {
@@ -319,7 +315,7 @@ function DocItemRow({ doc, onDelete }: { doc: DocRow; onDelete?: () => void }) {
   );
 }
 
-function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asset: Asset; assetId: string; currentUser: { nombre: string; email: string } | null; reloadAsset: () => void }) {
+function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset, canDeleteNotes }: { asset: Asset; assetId: string; currentUser: { nombre: string; email: string } | null; reloadAsset: () => void; canDeleteNotes: boolean }) {
   const { compradores, session } = useApp();
   const isAgente = session?.role === "vendedor";
   const [generalNote, setGeneralNote] = useState("");
@@ -855,7 +851,13 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
           {assetNotesList.length > 0 && (
             <div className="mb-3 flex flex-col gap-2">
               {assetNotesList.map((n) => (
-                <NoteCard key={n.id} note={n} />
+                <AssetNoteCard
+                  key={n.id}
+                  note={n}
+                  onDelete={canDeleteNotes ? (noteId) => deleteAssetNote(noteId, async () => {
+                    setAssetNotesList(await fetchNotas({ assetId }));
+                  }) : undefined}
+                />
               ))}
             </div>
           )}
@@ -899,7 +901,7 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
   );
 }
 
-function TabDocumentacion({ assetId, docSubTab, setDocSubTab, currentUser }: { assetId: string; docSubTab: number; setDocSubTab: (n: number) => void; currentUser: { nombre: string; email: string } | null }) {
+function TabDocumentacion({ assetId, docSubTab, setDocSubTab, currentUser, canDeleteNotes }: { assetId: string; docSubTab: number; setDocSubTab: (n: number) => void; currentUser: { nombre: string; email: string } | null; canDeleteNotes: boolean }) {
   const [docs, setDocs] = useState<DocRow[]>([]);
   const [notes, setNotes] = useState<NotaRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1130,7 +1132,11 @@ function TabDocumentacion({ assetId, docSubTab, setDocSubTab, currentUser }: { a
           ) : (
             <div className="flex flex-col gap-2">
               {notes.map((n) => (
-                <NoteCard key={n.id} note={n} />
+                <AssetNoteCard
+                  key={n.id}
+                  note={n}
+                  onDelete={canDeleteNotes ? (noteId) => deleteAssetNote(noteId, loadData) : undefined}
+                />
               ))}
             </div>
           )}
@@ -1140,7 +1146,7 @@ function TabDocumentacion({ assetId, docSubTab, setDocSubTab, currentUser }: { a
   );
 }
 
-function TabAgentes({ asset, assetId, currentUser }: { asset: Asset; assetId: string; currentUser: { nombre: string; email: string } | null }) {
+function TabAgentes({ asset, assetId, currentUser, canDeleteNotes }: { asset: Asset; assetId: string; currentUser: { nombre: string; email: string } | null; canDeleteNotes: boolean }) {
   const [notes, setNotes] = useState<NotaRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNoteForm, setShowNoteForm] = useState(false);
@@ -1246,7 +1252,11 @@ function TabAgentes({ asset, assetId, currentUser }: { asset: Asset; assetId: st
       ) : (
         <div className="flex flex-col gap-2">
           {notes.map((n) => (
-            <NoteCard key={n.id} note={n} />
+            <AssetNoteCard
+              key={n.id}
+              note={n}
+              onDelete={canDeleteNotes ? (noteId) => deleteAssetNote(noteId, loadNotes) : undefined}
+            />
           ))}
         </div>
       )}
@@ -1408,7 +1418,7 @@ function TabClientes({ assetId }: { assetId: string }) {
   );
 }
 
-function TabAdmin({ asset, assetId, togglePub, currentUser, reloadAsset }: { asset: Asset; assetId: string; togglePub: () => void; currentUser: { nombre: string; email: string } | null; reloadAsset: () => void }) {
+function TabAdmin({ asset, assetId, togglePub, currentUser, reloadAsset, canDeleteNotes }: { asset: Asset; assetId: string; togglePub: () => void; currentUser: { nombre: string; email: string } | null; reloadAsset: () => void; canDeleteNotes: boolean }) {
   const [adminNote, setAdminNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [savingFase, setSavingFase] = useState(false);
@@ -1638,7 +1648,11 @@ function TabAdmin({ asset, assetId, togglePub, currentUser, reloadAsset }: { ass
           ) : notes.length > 0 && (
             <div className="mt-3 flex flex-col gap-2">
               {notes.map((n) => (
-                <NoteCard key={n.id} note={n} />
+                <AssetNoteCard
+                  key={n.id}
+                  note={n}
+                  onDelete={canDeleteNotes ? (noteId) => deleteAssetNote(noteId, loadAdminNotes) : undefined}
+                />
               ))}
             </div>
           )}

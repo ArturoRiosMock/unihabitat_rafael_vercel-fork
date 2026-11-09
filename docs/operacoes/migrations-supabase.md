@@ -18,11 +18,13 @@
 | `supabase-migration-categoria-libre.sql` | Remove CHECK de categoría; valores libres (Excel) |
 | `supabase-migration-comprador-acceso.sql` | Coluna `compradores.acceso` (`sin_acceso` \| `activo`) |
 | `supabase/migrations/20261109_assets_published_at.sql` | Coluna `assets.published_at` (última publicação; backfill com `created_at`) |
+| `supabase/migrations/20261109_notas_admin_delete.sql` | DELETE de `notas` só com `is_admin()`. Sem política de borrado para agente ou comprador |
+| `supabase-migration-documentos-bucket.sql` | Bucket privado `documentos` + RLS de storage. As descargas usam `createSignedUrl` (não `getPublicUrl`) |
 
 ## Ordem sugerida (novo ambiente)
 
 1. `supabase-schema.sql`
-2. Migrações incrementais por data/necessidade (excel-raw, map-columns, comprador-assets, inmuebles-propiedades, agentes, categoria-libre, comprador-acceso, `supabase/migrations/20261109_assets_published_at.sql`)
+2. Migrações incrementais por data/necessidade (excel-raw, map-columns, comprador-assets, inmuebles-propiedades, agentes, categoria-libre, comprador-acceso, `supabase/migrations/20261109_assets_published_at.sql`, `supabase/migrations/20261109_notas_admin_delete.sql`, `supabase-migration-documentos-bucket.sql`)
 3. `supabase-dev-policies.sql` — **apenas dev**
 
 **Atenção:** `supabase-migration-inmuebles-propiedades.sql` pode truncar dados legacy de assets — rever antes de aplicar em produção.

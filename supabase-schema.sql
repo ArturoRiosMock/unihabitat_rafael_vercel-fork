@@ -355,9 +355,13 @@ create policy "mensajes_client_insert" on public.mensajes
     and from_role = 'cli'
   );
 
--- NOTAS: admin only
+-- NOTAS: admin only (lectura y escritura).
+-- DELETE explícito: solo admin. Agentes y compradores no borran notas,
+-- ni propias ni ajenas. Ver supabase/migrations/20261109_notas_admin_delete.sql.
 create policy "notas_admin" on public.notas
   for all using (public.is_admin());
+create policy "notas_admin_delete" on public.notas
+  for delete using (public.is_admin());
 
 -- DOCUMENTOS: admin full access, clients see shared docs
 create policy "documentos_admin" on public.documentos
