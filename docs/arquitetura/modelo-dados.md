@@ -53,6 +53,7 @@ Campos principais em [`src/lib/types.ts`](../../src/lib/types.ts):
 - **Ligação:** `inmuebleId` → `Asset.id`, `activoId` → coluna Excel `ID1`
 - **Categoria:** `CDR` | `NPL` — determina colunas extra no parser
 - **Comercial/judicial:** `propietario`, `deuda`, `faseInterna`, `proceso`, `portfolio`, etc.
+- **Deuda e Proceso** na ficha: colunas `propiedades.deuda` e `propiedades.proceso`. Características só lê. Administrador escreve (a folha `excel_raw` projecta essas células ao gravar). Listado, portal NPL e export Excel usam os mesmos accessors.
 - **Situación** na UI (ficha admin Características, ficha pública Características e portal privado Información completa) é `faseInterna` da primeira propiedad. Coluna `propiedades.fase_interna` (já existe; sem migração nova). Carga Excel: cabeçalho **Fase Interna**, com alias **Situación**. Export admin: coluna **Situación**.
 - **Auditoria:** `excelRaw` — linha original por folha/cabeçalho
 
@@ -68,7 +69,7 @@ Campos que antes viviam em `asset.adm.*` devem ser lidos de `asset.propiedades[]
 | Oportunidade | `oportunidades` | Match com score |
 | Oferta | `ofertas` | Proposta + estados NDA |
 | Notificacion | `notificaciones` | Alertas in-app (+ email espelhado) |
-| Nota | `notas` | Nota de activo (ficha admin e «Mis notas» do portal). Sem tipo: a mesma linha aparece em várias secções. DELETE só admin |
+| Nota | `notas` | `scope`: `activo` (Características; cada agente vê as suas, admin todas) ou `privada` (só admin). `author_id` = quem criou. «Mis notas» do portal leva `comprador_id`. DELETE só admin |
 
 Tabelas de relação: `comprador_assets` (convites), `comprador_favoritos`, `vendedor_permissions`, `vendedor_assets`, `vendedor_compradores`.
 
@@ -92,6 +93,7 @@ Todo acesso DB passa por [`src/lib/supabase/db.ts`](../../src/lib/supabase/db.ts
 | `supabase-migration-excel-raw.sql` | Coluna excel_raw |
 | `supabase-dev-policies.sql` | RLS permissivo para dev (notas: select/insert; sem delete) |
 | `supabase/migrations/20261109_notas_admin_delete.sql` | Política DELETE de notas só admin |
+| `supabase/migrations/20261109_notas_select_visibilidad.sql` | SELECT: agente só as suas; comprador só as suas; privadas só via admin |
 
 Ver [migrations-supabase.md](../operacoes/migrations-supabase.md).
 

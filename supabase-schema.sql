@@ -160,6 +160,10 @@ create table if not exists public.notas (
   asset_id text references public.assets(id) on delete cascade,
   comprador_id text references public.compradores(id) on delete cascade,
   author text not null,
+  author_id uuid references auth.users(id) on delete set null,
+  -- activo: notas de la ficha (agente ve las suyas, admin todas).
+  -- privada: solo admin, pestaña Administrador.
+  scope text not null default 'activo' check (scope in ('activo', 'privada')),
   text text not null,
   created_at timestamptz default now()
 );
@@ -355,13 +359,64 @@ create policy "mensajes_client_insert" on public.mensajes
     and from_role = 'cli'
   );
 
--- NOTAS: admin only (lectura y escritura).
--- DELETE explícito: solo admin. Agentes y compradores no borran notas,
--- ni propias ni ajenas. Ver supabase/migrations/20261109_notas_admin_delete.sql.
+-- NOTAS: admin ve y escribe todo.
+-- SELECT de agente y comprador: supabase/migrations/20261109_notas_select_visibilidad.sql.
+-- DELETE explícito: solo admin. Ver supabase/migrations/20261109_notas_admin_delete.sql.
+create or replace function public.is_vendedor()
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select coalesce(
+    (select raw_user_meta_data->>'role' = 'vendedor'
+     from auth.users
+     where id = auth.uid()),
+    false
+  );
+$$;
+
+create or replace function public.nota_visible_para_agente(note_author_id uuid, note_author text)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select
+    (note_author_id is not null and note_author_id = auth.uid())
+    or (
+      note_author_id is null
+      and note_author = (
+        select v.nombre
+        from public.vendedores v
+        where v.user_id = auth.uid()
+        order by v.id
+        limit 1
+      )
+    );
+$$;
+
 create policy "notas_admin" on public.notas
   for all using (public.is_admin());
 create policy "notas_admin_delete" on public.notas
   for delete using (public.is_admin());
+create policy "notas_agente_select" on public.notas
+  for select using (
+    public.is_vendedor()
+    and scope = 'activo'
+    and comprador_id is null
+    and public.nota_visible_para_agente(author_id, author)
+  );
+create policy "notas_comprador_select" on public.notas
+  for select using (
+    comprador_id is not null
+    and scope = 'activo'
+    and comprador_id in (
+      select c.id from public.compradores c where c.user_id = auth.uid()
+    )
+  );
 
 -- DOCUMENTOS: admin full access, clients see shared docs
 create policy "documentos_admin" on public.documentos

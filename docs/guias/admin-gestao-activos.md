@@ -43,9 +43,23 @@ Na ficha do imóvel — secção clientes convidados:
 
 Atribuir vendedor ao imóvel ou comprador na ficha ou secção Agentes.
 
+## Deuda y Proceso
+
+Fonte única: `propiedades.deuda` e `propiedades.proceso` da primeira carga (a dívida do listado e do export é a soma de todas as cargas).
+
+| Onde | O que faz |
+|------|-----------|
+| Características | Só mostra. Admin e agente vêem o mesmo valor. Não há campos de edição. |
+| Administrador | Único sítio onde se edita. Com `excel_raw`, guardar a folha copia as células **Deuda** / **Proceso** (alias **Precio de la deuda**) para essas colunas. Sem `excel_raw`, o formulário «Datos administrativos» grava a fila da propriedade (`updatePropiedadFields`), não a tabela `assets`. |
+| Listado `/admin` | Colunas Deuda e Proceso (`getDeudaTotal`, `getProceso`). |
+| Portal | NPL mostra a dívida (`getPortalPriceDisplay`). |
+| Descargar Excel | Colunas Deuda e Proceso do mesmo accessor. |
+
+Antes, a pestaña Administrador gravava o JSON `excel_raw` (ou, sem Excel, colunas inexistentes em `assets`). Características lia as colunas tipadas e não mudava.
+
 ## Situación (Características)
 
-Na ficha `/admin/assets/[id]`, separador **Características**, coluna direita (por baixo de **Precio** e por cima de Deuda/Proceso, quando existem):
+Na ficha `/admin/assets/[id]`, separador **Características**, coluna direita (por baixo de **Precio** e por cima de Deuda/Proceso):
 
 - Etiqueta **Situación**, sempre visível.
 - Valor = fase interna da primeira propriedade (`propiedades.fase_interna`). Não há coluna nova: o campo já vem da carga Excel **Fase Interna** (o export do ponto 4 chama a mesma coluna **Situación**; a carga também aceita esse alias).
@@ -59,9 +73,22 @@ Tab admin mostra propiedades ligadas — dados de devedor, dívida, fase judicia
 
 ## Documentos e notas
 
-Upload documentos (Supabase Storage), notas internas, mensagens na ficha.
+Upload de documentos (Supabase Storage) no separador **Documentación**. Já não há subseparador de notas: as notas do activo estão em **Características**.
+
+Entre **Descripción del Activo** e **Notas del activo** fica o sítio livre para um futuro quadro **Información Adicional** (só admin escreve, todos lêem). Ainda não existe.
 
 **Descargar** (ficha `/admin/assets/[id]` → **Documentación**, admin e agente) abre uma URL firmada (`createSignedUrl`, 1 h). O bucket `documentos` é privado: não usar `getPublicUrl`. O mesmo vale para **Documentos** em `/portal/privado/inmueble/[slug]`.
+
+### Quem vê cada nota
+
+| Secção | Quem escreve | Quem lê |
+|--------|----------------|---------|
+| Características → **Notas del activo** | Admin e agente (`scope = activo`) | O agente só as que ele criou. O admin vê todas, com autor e data. |
+| Agentes → **Notas del agente** | Admin (a pestana é só admin) | O admin vê as notas de activo de todos os agentes. Um agente, se consultasse a action, só receberia as suas. |
+| Administrador → **Notas privadas** | Só admin (`scope = privada`) | Só admin. Não aparecem em Características nem para agentes. |
+| Portal → **Mis notas** | O comprador | Só esse comprador (e o admin, se pedir por `compradorId`). |
+
+A regra está na server action `fetchNotas` / `createNota` e nas políticas SELECT. Não chega esconder a linha no ecrã.
 
 ### Apagar uma nota (só admin)
 
@@ -70,17 +97,19 @@ Na ficha `/admin/assets/[id]` — a lista chama-se **Propiedades** em `/admin` �
 | Separador (menu esquerdo da ficha) | Secção exacta |
 |-------------------------------------|----------------|
 | Características | **Notas del activo** |
-| Documentación → subseparador **Notas** | **Notas y aclaraciones** |
 | Agentes | **Notas del agente** |
 | Administrador | **Notas privadas** |
 
-São a mesma tabela. Apagar numa secção tira a nota das outras.
+Apagar numa secção tira a nota das outras que mostrassem a mesma linha.
 
-O agente vê notas em Características e Documentación, **sem** botão. Não apaga notas próprias nem alheias: antes também não podia, e fica assim. No portal, **Mis notas** (`/portal/privado/inmueble/[slug]`) não tem apagar — o comprador não apaga; o admin pode apagar essa mesma linha na ficha.
+O agente vê as suas notas em Características, **sem** botão. Não apaga notas próprias nem alheias. No portal, **Mis notas** (`/portal/privado/inmueble/[slug]`) não tem apagar.
 
 Os comentários de uma oferta (`ofertas.comentarios`) não são notas e não se apagam aqui.
 
-SQL idempotente: [`supabase/migrations/20261109_notas_admin_delete.sql`](../../supabase/migrations/20261109_notas_admin_delete.sql). A action `deleteNota` exige rol admin e usa service role (o admin demo com cookie `dev-auth` pode não cumprir `is_admin()`).
+SQL idempotente:
+
+- DELETE: [`supabase/migrations/20261109_notas_admin_delete.sql`](../../supabase/migrations/20261109_notas_admin_delete.sql). A action `deleteNota` exige rol admin e usa service role (o admin demo com cookie `dev-auth` pode não cumprir `is_admin()`). A política `notas_admin_delete` mantém-se.
+- SELECT: [`supabase/migrations/20261109_notas_select_visibilidad.sql`](../../supabase/migrations/20261109_notas_select_visibilidad.sql). Colunas `author_id` e `scope` (`activo` \| `privada`). `notas_agente_select` e `notas_comprador_select`. Não cria DELETE para agente nem comprador.
 
 ## Ficheiros relacionados
 

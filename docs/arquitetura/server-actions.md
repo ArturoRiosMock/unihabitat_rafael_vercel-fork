@@ -21,8 +21,9 @@ Todas em `src/app/actions/`. Padrão: `"use server"`, auth via `auth-server.ts`,
 | `upsertAssets` | Import Excel — inmuebles |
 | `upsertPropiedades` | Import Excel — propiedades |
 | `toggleAssetPub` | Publicar/despublicar |
-| `updateAssetFields` | Edição parcial |
-| `updatePropiedadExcelRaw` | Actualizar excel raw |
+| `updateAssetFields` | Edição parcial do inmueble |
+| `updatePropiedadFields` | Edição parcial da carga (deuda, proceso, fase interna) |
+| `updatePropiedadExcelRaw` | Actualizar excel raw e projectar Deuda/Proceso para as colunas |
 | `deleteAssetsByIds` | Eliminação dos imóveis seleccionados (por IDs). Não existe eliminação de todos os activos. |
 | `toggleAssetFav` | Favorito admin |
 
@@ -114,7 +115,7 @@ Todas em `src/app/actions/`. Padrão: `"use server"`, auth via `auth-server.ts`,
 | Ficheiro | Funções principais |
 |----------|-------------------|
 | [`tareas.ts`](../../src/app/actions/tareas.ts) | `fetchTareas`, `upsertTarea`, `toggleTareaDone` |
-| [`notas.ts`](../../src/app/actions/notas.ts) | `fetchNotas`, `createNota`, `deleteNota` (só admin; agentes não apagam notas próprias nem alheias) |
+| [`notas.ts`](../../src/app/actions/notas.ts) | `fetchNotas` (agente: só as suas; admin: todas do `scope`), `createNota`, `deleteNota` (só admin; agentes não apagam notas próprias nem alheias) |
 | [`mensajes.ts`](../../src/app/actions/mensajes.ts) | `fetchMensajes`, `sendMensaje` |
 | [`documentos.ts`](../../src/app/actions/documentos.ts) | Upload/download. `getDocumentUrl` devolve `createSignedUrl` (bucket privado, TTL 1 h) |
 

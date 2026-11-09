@@ -61,14 +61,16 @@ describe("borrado de notas en la ficha de admin", () => {
     "utf8",
   );
 
-  it("muestra Borrar solo al admin en las cuatro listas de notas de la ficha", () => {
+  it("muestra Borrar solo al admin en las listas de notas que siguen en la ficha", () => {
     expect(assetPage).toContain("deleteNota");
     expect(assetPage).toContain("canDeleteNotes={userIsAdmin}");
-    expect(assetPage.match(/onDelete=\{canDeleteNotes \?/g)).toHaveLength(4);
+    expect(assetPage.match(/onDelete=\{canDeleteNotes \?/g)).toHaveLength(3);
     expect(assetPage).toContain('title="Notas del activo"');
-    expect(assetPage).toContain("Notas y aclaraciones");
+    expect(assetPage).not.toContain("Notas y aclaraciones");
     expect(assetPage).toContain("Notas del agente");
     expect(assetPage).toContain('title="Notas privadas"');
+    expect(assetPage).toContain('scope: "privada"');
+    expect(assetPage).toContain('scope: "activo"');
   });
 
   it("el portal del comprador no ofrece borrar notas", () => {

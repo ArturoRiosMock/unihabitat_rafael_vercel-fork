@@ -267,3 +267,27 @@ describe("upsertAssets — preserva pub/lat/lng existentes ante incoming vacío"
     expect(String(merged.map)).not.toContain("-3.7038");
   });
 });
+
+describe("updatePropiedadExcelRaw", () => {
+  beforeEach(() => vi.resetModules());
+
+  it("guarda el excel y proyecta Deuda y Proceso a las columnas de la propiedad", async () => {
+    const sb = makeSupabaseMock({});
+    vi.doMock("@/lib/supabase/server", () => ({
+      createClient: vi.fn(async () => sb.client),
+      createServiceClient: vi.fn(async () => sb.client),
+    }));
+    const { updatePropiedadExcelRaw } = await import("@/app/actions/assets");
+
+    await updatePropiedadExcelRaw("PROP-1", {
+      Hoja: { Deuda: "1500", Proceso: "Juicio", Municipio: "León" },
+    });
+
+    expect(sb.spies.from).toHaveBeenCalledWith("propiedades");
+    expect(sb.spies.update).toHaveBeenCalledWith({
+      excel_raw: { Hoja: { Deuda: "1500", Proceso: "Juicio", Municipio: "León" } },
+      deuda: 1500,
+      proceso: "Juicio",
+    });
+  });
+});

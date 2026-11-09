@@ -26,6 +26,7 @@ vi.mock("next/link", () => ({
 const mocks = vi.hoisted(() => ({
   session: { role: "admin" as "admin" | "vendedor" | "cliente", nombre: "Ana Admin", email: "admin@test" },
   updatePropiedadFields: vi.fn(async () => undefined),
+  updateAssetFields: vi.fn(async () => undefined),
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
@@ -42,8 +43,9 @@ vi.mock("@/app/actions/assets", () => ({
   fetchAssetByIdForAdmin: vi.fn(async () => currentAsset),
   fetchAssetsByActivoIdForAdmin: vi.fn(async () => []),
   toggleAssetPub: vi.fn(),
-  updateAssetFields: vi.fn(),
+  updateAssetFields: (...args: unknown[]) => mocks.updateAssetFields(...args),
   updatePropiedadFields: (...args: unknown[]) => mocks.updatePropiedadFields(...args),
+  updatePropiedadExcelRaw: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/app/actions/notas", () => ({
@@ -272,5 +274,52 @@ describe("Situación en la pestaña Características", () => {
     const group = screen.getByRole("group", { name: "Situación" });
     expect(group).toHaveTextContent("—");
     expect(within(group).queryByRole("combobox")).not.toBeInTheDocument();
+  });
+});
+
+describe("Deuda y proceso: una sola fuente", () => {
+  beforeEach(() => {
+    mocks.session.role = "admin";
+    mocks.updatePropiedadFields.mockClear();
+    mocks.updateAssetFields.mockClear();
+    currentAsset = makeAsset("Reservado");
+    currentAsset.propiedades[0].deuda = 12500;
+    currentAsset.propiedades[0].proceso = "Ejecución";
+  });
+
+  it("Características muestra la deuda y el proceso de la propiedad y no los edita", async () => {
+    renderFicha();
+
+    const group = await screen.findByRole("group", { name: "Deuda y proceso" });
+    expect(group).toHaveTextContent(`${(12500).toLocaleString("es-ES")} €`);
+    expect(group).toHaveTextContent("Ejecución");
+    expect(group).toHaveTextContent("Solo lectura");
+    expect(within(group).queryByRole("textbox")).not.toBeInTheDocument();
+    expect(within(group).queryByRole("spinbutton")).not.toBeInTheDocument();
+  });
+
+  it("el agente ve los mismos valores sin la pista de edición", async () => {
+    mocks.session.role = "vendedor";
+    renderFicha();
+
+    const group = await screen.findByRole("group", { name: "Deuda y proceso" });
+    expect(group).toHaveTextContent(`${(12500).toLocaleString("es-ES")} €`);
+    expect(group).toHaveTextContent("Ejecución");
+    expect(group).not.toHaveTextContent("pestaña Administrador");
+    expect(screen.queryByRole("button", { name: "Administrador" })).not.toBeInTheDocument();
+  });
+
+  it("guardar Deuda y Proceso en Administrador escribe la propiedad, no el inmueble", async () => {
+    const user = userEvent.setup();
+    renderFicha();
+
+    await user.click(await screen.findByRole("button", { name: "Administrador" }));
+    const proceso = await screen.findByRole("textbox", { name: "Proceso" });
+    await user.clear(proceso);
+    await user.type(proceso, "Subasta");
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+
+    expect(mocks.updatePropiedadFields).toHaveBeenCalledWith("PROP-1", { proceso: "Subasta" });
+    expect(mocks.updateAssetFields).not.toHaveBeenCalled();
   });
 });

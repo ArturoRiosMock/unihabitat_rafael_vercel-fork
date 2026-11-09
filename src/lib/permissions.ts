@@ -22,6 +22,10 @@ export interface UserSession {
   role: "admin" | "vendedor" | "cliente";
   nombre: string;
   vendedorId?: string;
+  /** `auth.users.id` cuando la sesión viene de Supabase Auth. */
+  userId?: string;
+  /** Fila `compradores.id` del cliente (cookie demo o lookup). */
+  compradorId?: string;
 }
 
 export function hrefToSection(pathname: string): SectionId | "config" | null {

@@ -54,6 +54,7 @@ export async function getServerSession(): Promise<UserSession | null> {
       email: user.email ?? "",
       role,
       nombre,
+      userId: user.id,
       ...(vendedorId ? { vendedorId } : {}),
     };
   } catch {

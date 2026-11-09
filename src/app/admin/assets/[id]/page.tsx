@@ -21,6 +21,7 @@ import type { Comprador } from "@/lib/types";
 import { InteractiveMap } from "@/components/InteractiveMap";
 import { EditableSection, type FieldDef } from "@/components/EditableSection";
 import { SituacionField } from "@/components/SituacionField";
+import { DeudaProcesoSummary } from "@/components/DeudaProcesoSummary";
 import { EditableExcelRawSection } from "@/components/EditableExcelRawSection";
 import { listEmptyExcelFields } from "@/lib/excel-raw-utils";
 import { FASE_INTERNA_OPTIONS, faseToCode } from "@/lib/fase-interna";
@@ -49,7 +50,6 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
   const ctxAsset = getAsset(id);
   const [remoteAsset, setRemoteAsset] = useState<Asset | null | undefined>(undefined);
   const [tab, setTab] = useState(0);
-  const [docSubTab, setDocSubTab] = useState(0);
   const [currentUser, setCurrentUser] = useState<{ nombre: string; email: string } | null>(null);
 
   const loadRemote = useCallback(() => {
@@ -196,7 +196,7 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
         {/* Content */}
         <div className="flex-1 overflow-y-auto bg-cream p-6">
           {tab === 0 && <TabCaracteristicas asset={asset} assetId={id} currentUser={currentUser} reloadAsset={loadRemote} canDeleteNotes={userIsAdmin} />}
-          {tab === 1 && <TabDocumentacion assetId={id} docSubTab={docSubTab} setDocSubTab={setDocSubTab} currentUser={currentUser} canDeleteNotes={userIsAdmin} />}
+          {tab === 1 && <TabDocumentacion assetId={id} currentUser={currentUser} />}
           {tab === 2 && userIsAdmin && <TabAgentes asset={asset} assetId={id} currentUser={currentUser} canDeleteNotes={userIsAdmin} />}
           {tab === 3 && userIsAdmin && <TabClientes assetId={id} />}
           {tab === 4 && userIsAdmin && <TabAdmin asset={asset} assetId={id} togglePub={() => void handleTogglePub()} currentUser={currentUser} reloadAsset={loadRemote} canDeleteNotes={userIsAdmin} />}
@@ -348,7 +348,7 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset, canDelet
     let cancelled = false;
     (async () => {
       try {
-        const notes = await fetchNotas({ assetId });
+        const notes = await fetchNotas({ assetId, scope: "activo" });
         if (!cancelled) setAssetNotesList(notes);
       } catch {
         if (!cancelled) setAssetNotesList([]);
@@ -595,16 +595,7 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset, canDelet
           <div className="flex flex-col gap-2">
             <EditableSection title="Precio" assetId={assetId} fields={precioFields} cols={1} onSaved={reloadAsset} />
             <SituacionField asset={asset} canEdit={canEditSituacion} onSaved={reloadAsset} />
-            {(getDeudaTotal(asset) != null || asset.propiedades[0]?.proceso) && (
-              <div className="rounded-lg border border-border bg-cream2 px-3 py-2 text-xs text-text">
-                {getDeudaTotal(asset) != null && (
-                  <p><span className="font-semibold text-muted">Deuda: </span>{fmt(getDeudaTotal(asset)!)}</p>
-                )}
-                {asset.propiedades[0]?.proceso && (
-                  <p className="mt-0.5"><span className="font-semibold text-muted">Proceso: </span>{asset.propiedades[0].proceso}</p>
-                )}
-              </div>
-            )}
+            <DeudaProcesoSummary asset={asset} showEditHint={canEditSituacion} />
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -848,9 +839,13 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset, canDelet
           </button>
         </div>
       </SectionCard>
+      {/* Hueco reservado: «Información Adicional» (solo admin escribe, todos leen)
+          irá aquí, entre Descripción del Activo y Notas del activo. */}
       <div className="mt-3">
         <SectionCard title="Notas del activo">
-          <p className="mb-2 text-[11px] text-muted">Notas visibles para agentes. Solo administración/agentes con permiso las añaden aquí.</p>
+          <p className="mb-2 text-[11px] text-muted">
+            Cada agente ve solo las notas que él creó. El administrador ve todas, con autor y fecha.
+          </p>
           {assetNotesList.length > 0 && (
             <div className="mb-3 flex flex-col gap-2">
               {assetNotesList.map((n) => (
@@ -858,7 +853,7 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset, canDelet
                   key={n.id}
                   note={n}
                   onDelete={canDeleteNotes ? (noteId) => deleteAssetNote(noteId, async () => {
-                    setAssetNotesList(await fetchNotas({ assetId }));
+                    setAssetNotesList(await fetchNotas({ assetId, scope: "activo" }));
                   }) : undefined}
                 />
               ))}
@@ -881,9 +876,10 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset, canDelet
                     assetId,
                     author: currentUser.nombre,
                     text: generalNote.trim(),
+                    scope: "activo",
                   });
                   setGeneralNote("");
-                  const notes = await fetchNotas({ assetId });
+                  const notes = await fetchNotas({ assetId, scope: "activo" });
                   setAssetNotesList(notes);
                   toast.success("Nota guardada", { description: "La nota general fue añadida al activo." });
                 } catch (err) {
@@ -904,34 +900,25 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset, canDelet
   );
 }
 
-function TabDocumentacion({ assetId, docSubTab, setDocSubTab, currentUser, canDeleteNotes }: { assetId: string; docSubTab: number; setDocSubTab: (n: number) => void; currentUser: { nombre: string; email: string } | null; canDeleteNotes: boolean }) {
+function TabDocumentacion({ assetId, currentUser }: { assetId: string; currentUser: { nombre: string; email: string } | null }) {
   const [docs, setDocs] = useState<DocRow[]>([]);
-  const [notes, setNotes] = useState<NotaRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [uploadSuccess, setUploadSuccess] = useState(false);
-  const [showNoteForm, setShowNoteForm] = useState(false);
-  const [noteText, setNoteText] = useState("");
-  const [savingNote, setSavingNote] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
 
   useEffect(() => {
     loadData();
-  }, [assetId, docSubTab]);
+  }, [assetId]);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      if (docSubTab === 0) {
-        const fetched = await fetchDocumentos({ assetId });
-        setDocs(fetched);
-      } else {
-        const fetched = await fetchNotas({ assetId });
-        setNotes(fetched);
-      }
+      const fetched = await fetchDocumentos({ assetId });
+      setDocs(fetched);
     } catch (err) {
       console.error("Error cargando datos:", err);
     } finally {
@@ -977,26 +964,6 @@ function TabDocumentacion({ assetId, docSubTab, setDocSubTab, currentUser, canDe
     }
   };
 
-  const handleSaveNote = async () => {
-    if (!noteText.trim() || !currentUser) return;
-    setSavingNote(true);
-    try {
-      await createNota({
-        assetId,
-        author: currentUser.nombre,
-        text: noteText.trim(),
-      });
-      setNoteText("");
-      setShowNoteForm(false);
-      await loadData();
-      toast.success("Nota guardada");
-    } catch (err) {
-      toast.error("Error al guardar la nota", { description: err instanceof Error ? err.message : String(err) });
-    } finally {
-      setSavingNote(false);
-    }
-  };
-
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -1018,18 +985,6 @@ function TabDocumentacion({ assetId, docSubTab, setDocSubTab, currentUser, canDe
 
   return (
     <>
-      <div className="mb-4 flex gap-0 border-b border-border">
-        {[["Documentos", FileText], ["Notas", MessageSquare]].map(([lbl, Icon], i) => {
-          const I = Icon as typeof FileText;
-          return (
-            <button key={i} onClick={() => setDocSubTab(i)} className={`-mb-px flex items-center gap-1.5 border-b-2 px-4 py-2 text-xs font-medium transition-all ${docSubTab === i ? "border-b-navy text-navy" : "border-b-transparent text-muted"}`}>
-              <I size={13} /> {lbl as string}
-            </button>
-          );
-        })}
-      </div>
-      {docSubTab === 0 && (
-        <>
           <div
             ref={dropZoneRef}
             onDragOver={handleDragOver}
@@ -1085,66 +1040,6 @@ function TabDocumentacion({ assetId, docSubTab, setDocSubTab, currentUser, canDe
               ))}
             </div>
           )}
-        </>
-      )}
-      {docSubTab === 1 && (
-        <>
-          <div className="mb-3 flex items-center justify-between">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">Notas y aclaraciones</p>
-            <button
-              onClick={() => setShowNoteForm(!showNoteForm)}
-              className="flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-text hover:bg-cream"
-            >
-              <Plus size={12} /> Nueva nota
-            </button>
-          </div>
-          {showNoteForm && (
-            <div className="mb-3 rounded-lg border border-border bg-white p-4">
-              <textarea
-                value={noteText}
-                onChange={(e) => setNoteText(e.target.value)}
-                className="mb-2 w-full rounded-md border border-border bg-cream2 p-3 text-sm text-text outline-none focus:border-navy"
-                rows={3}
-                placeholder="Escribe tu nota aquí..."
-              />
-              <div className="flex justify-end gap-2">
-                <button
-                  onClick={() => { setShowNoteForm(false); setNoteText(""); }}
-                  className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text hover:bg-cream"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleSaveNote}
-                  disabled={!noteText.trim() || savingNote}
-                  className="flex items-center gap-1.5 rounded-md bg-gold px-3 py-1.5 text-xs font-medium text-white hover:bg-gold2 disabled:opacity-50"
-                >
-                  {savingNote ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Guardar
-                </button>
-              </div>
-            </div>
-          )}
-          {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 size={24} className="animate-spin text-gold" />
-            </div>
-          ) : notes.length === 0 ? (
-            <div className="rounded-lg border border-border bg-white p-6 text-center text-sm text-muted">
-              No hay notas aún
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {notes.map((n) => (
-                <AssetNoteCard
-                  key={n.id}
-                  note={n}
-                  onDelete={canDeleteNotes ? (noteId) => deleteAssetNote(noteId, loadData) : undefined}
-                />
-              ))}
-            </div>
-          )}
-        </>
-      )}
     </>
   );
 }
@@ -1163,7 +1058,7 @@ function TabAgentes({ asset, assetId, currentUser, canDeleteNotes }: { asset: As
   const loadNotes = async () => {
     setLoading(true);
     try {
-      const fetched = await fetchNotas({ assetId });
+      const fetched = await fetchNotas({ assetId, scope: "activo" });
       setNotes(fetched);
     } catch (err) {
       console.error("Error cargando notas:", err);
@@ -1180,6 +1075,7 @@ function TabAgentes({ asset, assetId, currentUser, canDeleteNotes }: { asset: As
         assetId,
         author: currentUser.nombre,
         text: noteText.trim(),
+        scope: "activo",
       });
       setNoteText("");
       setShowNoteForm(false);
@@ -1210,7 +1106,12 @@ function TabAgentes({ asset, assetId, currentUser, canDeleteNotes }: { asset: As
       <AssetAgenteAssignmentCard assetId={assetId} />
 
       <div className="mb-3 flex items-center justify-between">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">Notas del agente</p>
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">Notas del agente</p>
+          <p className="mt-1 text-[11px] text-muted">
+            El administrador ve las notas de cada agente, con autor y fecha. Un agente solo ve las suyas, en Características.
+          </p>
+        </div>
         <button
           onClick={() => setShowNoteForm(!showNoteForm)}
           className="flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-text hover:bg-cream"
@@ -1447,8 +1348,8 @@ function TabAdmin({ asset, assetId, togglePub, currentUser, reloadAsset, canDele
   const loadAdminNotes = async () => {
     setLoadingNotes(true);
     try {
-      const fetched = await fetchNotas({ assetId });
-      setNotes(fetched.filter(n => n.author === "Admin" || n.author === (currentUser?.nombre || "Admin")));
+      const fetched = await fetchNotas({ assetId, scope: "privada" });
+      setNotes(fetched);
     } catch (err) {
       console.error("Error cargando notas admin:", err);
     } finally {
@@ -1464,6 +1365,7 @@ function TabAdmin({ asset, assetId, togglePub, currentUser, reloadAsset, canDele
         assetId,
         author: currentUser.nombre,
         text: adminNote.trim(),
+        scope: "privada",
       });
       setAdminNote("");
       await loadAdminNotes();
@@ -1488,8 +1390,8 @@ function TabAdmin({ asset, assetId, togglePub, currentUser, reloadAsset, canDele
     { label: "Stage Status", dbCol: "stage_status", value: p.stageStatus },
     { label: "Stage SubStatus", dbCol: "stage_substatus", value: p.stageSubstatus },
     { label: "Lien", dbCol: "lien", value: p.lien },
-    { label: "Deuda", dbCol: "deuda", value: p.deuda != null ? p.deuda.toLocaleString("es-ES") + " €" : "—" },
-    { label: "Precio Publicación", dbCol: "precio_publicacion", value: p.precioPublicacion != null ? p.precioPublicacion.toLocaleString("es-ES") + " €" : "—" },
+    { label: "Deuda", dbCol: "deuda", value: p.deuda != null ? p.deuda.toLocaleString("es-ES") + " €" : "—", numeric: true },
+    { label: "Precio Publicación", dbCol: "precio_publicacion", value: p.precioPublicacion != null ? p.precioPublicacion.toLocaleString("es-ES") + " €" : "—", numeric: true },
     { label: "Fase Interna", dbCol: "fase_interna", value: p.faseInterna },
     { label: "Proceso", dbCol: "proceso", value: p.proceso, colSpan: 2 },
     { label: "Juzgado Larga", dbCol: "juzgado_larga", value: p.juzgadoLarga, colSpan: 2 },
@@ -1591,6 +1493,9 @@ function TabAdmin({ asset, assetId, togglePub, currentUser, reloadAsset, canDele
         </SectionCard>
       </div>
 
+      <p className="mb-3 text-xs leading-relaxed text-muted">
+        Deuda y Proceso se guardan en la propiedad. Características, el listado, el portal y la descarga Excel leen esos mismos campos.
+      </p>
       <div className="mb-4">
         {hasDynamicExcel && propExcelRaw ? (
           <>
@@ -1611,9 +1516,10 @@ function TabAdmin({ asset, assetId, togglePub, currentUser, reloadAsset, canDele
             </p>
             <EditableSection
               title="Datos administrativos (primera propiedad)"
-              assetId={assetId}
+              assetId={p?.id ?? ""}
               cols={4}
               onSaved={reloadAsset}
+              persist={updatePropiedadFields}
               fields={provFields}
             />
           </>
@@ -1622,6 +1528,9 @@ function TabAdmin({ asset, assetId, togglePub, currentUser, reloadAsset, canDele
 
       <div className="mb-4">
         <SectionCard title="Notas privadas">
+          <p className="mb-2 text-[11px] text-muted">
+            Solo administración. No aparecen en Características y ningún agente las ve.
+          </p>
           <textarea
             value={adminNote}
             onChange={(e) => setAdminNote(e.target.value)}
