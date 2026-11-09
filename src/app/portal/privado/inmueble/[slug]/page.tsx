@@ -3,13 +3,14 @@
 import { use, useState, useEffect } from "react";
 import { fetchAssetByPublicSlug } from "@/app/actions/assets";
 import { createNota, fetchNotas, type NotaRow } from "@/app/actions/notas";
+import { fetchDocumentos, getDocumentUrl, type DocRow } from "@/app/actions/documentos";
 import { ensureCompradorForEmail } from "@/app/actions/compradores";
 import type { Asset } from "@/lib/types";
 import { fmtM, getDescriptionText, getPortalPriceDisplay } from "@/lib/utils";
 import { useFavoritos } from "@/hooks/useFavoritos";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
-import { ArrowLeft, FileText, StickyNote, FolderOpen, Lock, Star, Loader2, Send } from "lucide-react";
+import { ArrowLeft, Download, FileText, StickyNote, FolderOpen, Lock, Star, Loader2, Send } from "lucide-react";
 import { InteractiveMap } from "@/components/InteractiveMap";
 import { toast } from "@/lib/toast";
 
@@ -197,14 +198,86 @@ export default function PortalPrivadoInmuebleSlugPage({
         />
       )}
 
-      {tab === "docs" && (
-        <div>
-          <div className="py-16 text-center">
-            <FolderOpen size={40} className="mx-auto mb-3 text-border" />
-            <p className="text-sm text-muted">No hay documentos compartidos contigo</p>
+      {tab === "docs" && <MisDocumentosPanel assetId={asset.id} />}
+    </div>
+  );
+}
+
+function MisDocumentosPanel({ assetId }: { assetId: string }) {
+  const [docs, setDocs] = useState<DocRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetchDocumentos({ assetId })
+      .then((rows) => {
+        if (!cancelled) setDocs(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setDocs([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [assetId]);
+
+  async function handleDownload(doc: DocRow) {
+    setDownloadingId(doc.id);
+    try {
+      const url = await getDocumentUrl(doc.storage_path);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      toast.error("No se pudo abrir el documento", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setDownloadingId(null);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted">
+        <Loader2 size={16} className="animate-spin" /> Cargando documentos…
+      </div>
+    );
+  }
+
+  if (docs.length === 0) {
+    return (
+      <div className="py-16 text-center">
+        <FolderOpen size={40} className="mx-auto mb-3 text-border" />
+        <p className="text-sm text-muted">No hay documentos compartidos contigo</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      {docs.map((doc) => (
+        <div key={doc.id} className="flex items-center gap-3 rounded-lg border border-border bg-white p-3">
+          <FileText size={16} className="text-navy" />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-medium text-navy">{doc.name}</div>
+            <div className="text-[11px] text-muted">{doc.uploaded_by}</div>
           </div>
+          <button
+            type="button"
+            onClick={() => void handleDownload(doc)}
+            disabled={downloadingId === doc.id}
+            aria-label={`Descargar ${doc.name}`}
+            className="flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-navy hover:bg-cream disabled:opacity-50"
+          >
+            {downloadingId === doc.id ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+            Descargar
+          </button>
         </div>
-      )}
+      ))}
     </div>
   );
 }

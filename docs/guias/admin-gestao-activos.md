@@ -51,6 +51,8 @@ Tab admin mostra propiedades ligadas — dados de devedor, dívida, fase judicia
 
 Upload documentos (Supabase Storage), notas internas, mensagens na ficha.
 
+**Descargar** (ficha `/admin/assets/[id]` → **Documentación**, admin e agente) abre uma URL firmada (`createSignedUrl`, 1 h). O bucket `documentos` é privado: não usar `getPublicUrl`. O mesmo vale para **Documentos** em `/portal/privado/inmueble/[slug]`.
+
 ### Apagar uma nota (só admin)
 
 Na ficha `/admin/assets/[id]` — a lista chama-se **Propiedades** em `/admin` — o admin vê o botão **Borrar** em cada nota. Há confirmação (`¿Eliminar esta nota?`). A linha desaparece de `public.notas`.

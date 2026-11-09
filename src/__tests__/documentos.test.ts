@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -63,6 +65,8 @@ describe("getDocumentUrl", () => {
 
     expect(url).toBe("https://example.com/signed?token=abc");
     expect(storageMock.from).toHaveBeenCalledWith("documentos");
+    const signed = storageMock.from.mock.results[0]?.value.createSignedUrl as ReturnType<typeof vi.fn>;
+    expect(signed).toHaveBeenCalledWith("assets/123/test.pdf", 3600);
   });
 
   it("throws an error when createSignedUrl fails", async () => {
@@ -120,6 +124,56 @@ describe("uploadDocumento", () => {
     formData.append("asset_id", "ASSET-123");
 
     await expect(uploadDocumento(formData)).rejects.toThrow("No se adjuntó archivo");
+  });
+});
+
+function listTypeScriptFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name === "node_modules" || entry.name === ".next") continue;
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      out.push(...listTypeScriptFiles(full));
+      continue;
+    }
+    if (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx")) out.push(full);
+  }
+  return out;
+}
+
+describe("descarga de documentos sin URL pública", () => {
+  const srcRoot = resolve(__dirname, "..");
+  const adminPage = readFileSync(resolve(__dirname, "../app/admin/assets/[id]/page.tsx"), "utf8");
+  const portalPage = readFileSync(
+    resolve(__dirname, "../app/portal/privado/inmueble/[slug]/page.tsx"),
+    "utf8",
+  );
+  const migration = readFileSync(
+    resolve(__dirname, "../../supabase-migration-documentos-bucket.sql"),
+    "utf8",
+  );
+
+  it("admin, agente y portal comprador abren el archivo con getDocumentUrl", () => {
+    expect(adminPage).toContain("getDocumentUrl(doc.storage_path)");
+    expect(adminPage).toContain("Descargar");
+    expect(portalPage).toContain("getDocumentUrl(doc.storage_path)");
+    expect(portalPage).toContain("Descargar");
+    expect(adminPage).not.toContain("getPublicUrl");
+    expect(portalPage).not.toContain("getPublicUrl");
+  });
+
+  it("ningún módulo de src llama a la URL pública del storage", () => {
+    const publicUrlCall = ".getPublic" + "Url(";
+    const offenders = listTypeScriptFiles(srcRoot).filter((file) =>
+      readFileSync(file, "utf8").includes(publicUrlCall),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it("la migración deja el bucket privado y usa comprador_assets", () => {
+    expect(migration).toContain("public = false");
+    expect(migration).toContain("join public.comprador_assets");
+    expect(migration).not.toMatch(/join\s+public\.comprador_acceso/);
   });
 });
 

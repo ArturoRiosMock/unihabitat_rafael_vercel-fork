@@ -26,6 +26,7 @@ values (
         'text/csv', 'application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed']
 )
 on conflict (id) do update set
+  public = false,
   file_size_limit = excluded.file_size_limit,
   allowed_mime_types = excluded.allowed_mime_types;
 
@@ -68,7 +69,8 @@ create policy "docs_agente_read" on storage.objects
     )
   );
 
--- 3.3 Clientes (compradores): pueden leer documentos de activos a los que están invitados
+-- 3.3 Clientes (compradores): pueden leer documentos de activos a los que están invitados.
+-- La invitación comprador↔activo vive en public.comprador_assets.
 create policy "docs_client_read" on storage.objects
   for select using (
     bucket_id = 'documentos'
@@ -83,7 +85,7 @@ create policy "docs_client_read" on storage.objects
       -- O documentos de activos a los que el comprador tiene acceso
       or exists (
         select 1 from public.compradores c
-        join public.comprador_acceso ca on ca.comprador_id = c.id
+        join public.comprador_assets ca on ca.comprador_id = c.id
         where c.user_id = auth.uid()
           and (storage.foldername(name))[1] = 'assets'
           and (storage.foldername(name))[2] = ca.asset_id

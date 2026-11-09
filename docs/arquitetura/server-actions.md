@@ -116,7 +116,7 @@ Todas em `src/app/actions/`. Padrão: `"use server"`, auth via `auth-server.ts`,
 | [`tareas.ts`](../../src/app/actions/tareas.ts) | `fetchTareas`, `upsertTarea`, `toggleTareaDone` |
 | [`notas.ts`](../../src/app/actions/notas.ts) | `fetchNotas`, `createNota`, `deleteNota` (só admin; agentes não apagam notas próprias nem alheias) |
 | [`mensajes.ts`](../../src/app/actions/mensajes.ts) | `fetchMensajes`, `sendMensaje` |
-| [`documentos.ts`](../../src/app/actions/documentos.ts) | Upload/download Supabase Storage |
+| [`documentos.ts`](../../src/app/actions/documentos.ts) | Upload/download. `getDocumentUrl` devolve `createSignedUrl` (bucket privado, TTL 1 h) |
 
 ## Favoritos e sessão
 
