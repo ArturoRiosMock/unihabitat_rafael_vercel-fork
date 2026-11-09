@@ -12,12 +12,17 @@ vi.mock("@/lib/auth-server", () => ({
 function makeSupabaseMock(behaviour: {
   selectMaybeSingle?: { data: unknown; error: unknown };
   updateError?: unknown;
+  updateResults?: Array<{ error: unknown }>;
   upsertError?: unknown;
   selectIn?: { data: unknown; error: unknown };
 }) {
   const upsert = vi.fn(async () => ({ error: behaviour.upsertError ?? null }));
+  const updateResults = behaviour.updateResults ? [...behaviour.updateResults] : null;
   const update = vi.fn(() => ({
-    eq: vi.fn(async () => ({ error: behaviour.updateError ?? null })),
+    eq: vi.fn(async () => {
+      if (updateResults && updateResults.length > 0) return updateResults.shift()!;
+      return { error: behaviour.updateError ?? null };
+    }),
   }));
   const eq = vi.fn(() => ({
     maybeSingle: vi.fn(async () => behaviour.selectMaybeSingle ?? { data: null, error: null }),
@@ -84,6 +89,69 @@ describe("toggleAssetPub", () => {
 
     await expect(toggleAssetPub("MISSING")).rejects.toThrow(/Inmueble no encontrado/);
   });
+
+  it("al publicar sella published_at y al despublicar no lo borra", async () => {
+    const publishing = makeSupabaseMock({
+      selectMaybeSingle: { data: { pub: false }, error: null },
+    });
+    vi.doMock("@/lib/supabase/server", () => ({
+      createClient: vi.fn(async () => publishing.client),
+      createServiceClient: vi.fn(async () => publishing.client),
+    }));
+    const { toggleAssetPub } = await import("@/app/actions/assets");
+    await expect(toggleAssetPub("ASSET-1")).resolves.toBe(true);
+    expect(publishing.spies.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pub: true,
+        published_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      }),
+    );
+
+    vi.resetModules();
+    const unpublishing = makeSupabaseMock({
+      selectMaybeSingle: { data: { pub: true, published_at: "2024-05-01T10:00:00.000Z" }, error: null },
+    });
+    vi.doMock("@/lib/supabase/server", () => ({
+      createClient: vi.fn(async () => unpublishing.client),
+      createServiceClient: vi.fn(async () => unpublishing.client),
+    }));
+    const again = await import("@/app/actions/assets");
+    await expect(again.toggleAssetPub("ASSET-1")).resolves.toBe(false);
+    expect(unpublishing.spies.update).toHaveBeenCalledTimes(1);
+    expect(unpublishing.spies.update).toHaveBeenCalledWith({ pub: false });
+  });
+
+  it("si published_at aún no existe, publica igualmente solo con pub", async () => {
+    const sb = makeSupabaseMock({
+      selectMaybeSingle: { data: { pub: false }, error: null },
+      updateResults: [
+        { error: { message: "Could not find the 'published_at' column of 'assets' in the schema cache", code: "PGRST204" } },
+        { error: null },
+      ],
+    });
+    vi.doMock("@/lib/supabase/server", () => ({
+      createClient: vi.fn(async () => sb.client),
+      createServiceClient: vi.fn(async () => sb.client),
+    }));
+    const { toggleAssetPub } = await import("@/app/actions/assets");
+    await expect(toggleAssetPub("ASSET-1")).resolves.toBe(true);
+    expect(sb.spies.update).toHaveBeenNthCalledWith(1, expect.objectContaining({ pub: true, published_at: expect.any(String) }));
+    expect(sb.spies.update).toHaveBeenNthCalledWith(2, { pub: true });
+  });
+
+  it("no reintenta cuando el update falla por otro motivo", async () => {
+    const sb = makeSupabaseMock({
+      selectMaybeSingle: { data: { pub: false }, error: null },
+      updateError: { message: "permission denied", code: "42501" },
+    });
+    vi.doMock("@/lib/supabase/server", () => ({
+      createClient: vi.fn(async () => sb.client),
+      createServiceClient: vi.fn(async () => sb.client),
+    }));
+    const { toggleAssetPub } = await import("@/app/actions/assets");
+    await expect(toggleAssetPub("ASSET-1")).rejects.toThrow("permission denied");
+    expect(sb.spies.update).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("fetchAssetById (cliente anónimo, RLS public_read)", () => {
@@ -123,6 +191,7 @@ describe("upsertAssets — preserva pub/lat/lng existentes ante incoming vacío"
   it("no sobrescribe pub=true ni borra lat/lng existentes cuando el incoming es vacío", async () => {
     const existing = {
       id: "A1", pub: true, lat: 36.807, lng: -5.179,
+      published_at: "2024-02-02T00:00:00.000Z",
       map: "https://maps.geoapify.com/v1/staticmap?center=lonlat:-5.179,36.807&zoom=15&apiKey=k",
       addr: "C/ Real 1", pob: "Granada", prov: "Granada", cp: "18001",
       referencia: "REF1", public_slug: "piso-granada-abcdef",
@@ -169,6 +238,7 @@ describe("upsertAssets — preserva pub/lat/lng existentes ante incoming vacío"
       map: "",
       clase: "—", uso: "—", bien: "—", supC: "—", supG: "—", coef: "—", ccaa: "—",
       fullAddr: "—", desc: "—",
+      publishedAt: "2099-01-01T00:00:00.000Z",
       propiedades: [],
     };
 
@@ -184,6 +254,7 @@ describe("upsertAssets — preserva pub/lat/lng existentes ante incoming vacío"
 
     // Las propiedades clave deben mantener los valores ya persistidos.
     expect(merged.pub).toBe(true);
+    expect(merged.published_at).toBe("2024-02-02T00:00:00.000Z");
     expect(merged.lat).toBe(36.807);
     expect(merged.lng).toBe(-5.179);
     expect(merged.public_slug).toBe("piso-granada-abcdef");

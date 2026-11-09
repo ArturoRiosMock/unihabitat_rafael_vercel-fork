@@ -9,15 +9,40 @@ import {
 } from "@/lib/asset-filters";
 import Link from "next/link";
 import type { Asset } from "@/lib/types";
-import { Search, Star, X, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Plus, Check, Trash2 } from "lucide-react";
+import { Search, Star, X, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Plus, Check, Trash2, Download } from "lucide-react";
 import { UploadActivosModal } from "./UploadActivosModal";
 import { FilterSelect } from "@/components/FilterSelect";
 import { deleteAssetsByIds, toggleAssetPub } from "@/app/actions/assets";
 import { isAdmin } from "@/lib/auth-helpers";
 import { getCategoria, getFaseInterna, getFaseC, getActivoId } from "@/lib/utils";
+import { compareByPublicationDate, publicationListLabel } from "@/lib/asset-publication";
+import { downloadAssetsWorkbook, resolveAssetsForExport } from "@/lib/asset-excel";
 import { toast } from "@/lib/toast";
 
-type SortCol = "prov" | "pob" | "sqm" | "precio" | "cat" | "addr" | "cp" | "tip" | "fase" | "proceso" | "deuda" | "pub";
+type SortCol = "prov" | "pob" | "sqm" | "precio" | "cat" | "addr" | "cp" | "tip" | "fase" | "proceso" | "deuda" | "pub" | "publishedAt";
+
+const ASSET_GRID =
+  "grid-cols-[32px_28px_72px_100px_100px_1fr_56px_56px_100px_minmax(6rem,1fr)_minmax(4.5rem,88px)_72px_90px_108px_95px_28px]";
+
+const SORT_LABELS: Record<SortCol, string> = {
+  cat: "Cat.",
+  prov: "Provincia",
+  pob: "Población",
+  addr: "Dirección",
+  cp: "C.P.",
+  sqm: "m²",
+  tip: "Tipo",
+  fase: "Situación",
+  proceso: "Proceso",
+  deuda: "Deuda",
+  pub: "Estado",
+  publishedAt: "Publicación",
+  precio: "Precio",
+};
+
+const TABLE_COLS: SortCol[] = [
+  "cat", "prov", "pob", "addr", "cp", "sqm", "tip", "fase", "proceso", "deuda", "pub", "publishedAt", "precio",
+];
 
 const PAGE_SIZE_OPTIONS = [250, 500, 1000] as const;
 const DEFAULT_PAGE_SIZE = 500;
@@ -37,6 +62,15 @@ const pillClass: Record<string, string> = {
   "fp-cer": "bg-muted/8 text-muted",
   "fp-nd": "bg-muted/8 text-muted",
 };
+
+function PublicationDate({ asset }: { asset: Asset }) {
+  const publication = publicationListLabel(asset);
+  return (
+    <span className="whitespace-nowrap text-[11px] text-muted" title={publication.title}>
+      {publication.text}
+    </span>
+  );
+}
 
 export default function ActivosPage() {
   const { assets, toggleFav, toggleChk, toggleChkAll, session, removeAssetsByIds } = useApp();
@@ -91,20 +125,21 @@ export default function ActivosPage() {
       return true;
     });
     res.sort((a, b) => {
+      if (sortCol === "publishedAt") return compareByPublicationDate(a, b, sortDir);
       const va = sortCol === "addr" ? displayAssetAddress(a)
         : sortCol === "cat" ? getCategoria(a)
         : sortCol === "fase" ? getFaseInterna(a)
         : sortCol === "proceso" ? getProceso(a)
         : sortCol === "deuda" ? getDeudaTotal(a)
         : sortCol === "pub" ? (a.pub ? 1 : 0)
-        : a[sortCol as keyof Asset];
+        : a[sortCol as "prov" | "pob" | "sqm" | "precio" | "cp" | "tip"];
       const vb = sortCol === "addr" ? displayAssetAddress(b)
         : sortCol === "cat" ? getCategoria(b)
         : sortCol === "fase" ? getFaseInterna(b)
         : sortCol === "proceso" ? getProceso(b)
         : sortCol === "deuda" ? getDeudaTotal(b)
         : sortCol === "pub" ? (b.pub ? 1 : 0)
-        : b[sortCol as keyof Asset];
+        : b[sortCol as "prov" | "pob" | "sqm" | "precio" | "cp" | "tip"];
       if (va === null || va === undefined) return sortDir;
       if (vb === null || vb === undefined) return -sortDir;
       if (typeof va === "string" && typeof vb === "string") return va.localeCompare(vb) * sortDir;
@@ -153,7 +188,10 @@ export default function ActivosPage() {
 
   const handleSort = (col: SortCol) => {
     if (sortCol === col) setSortDir(d => d === 1 ? -1 : 1);
-    else { setSortCol(col); setSortDir(1); }
+    else {
+      setSortCol(col);
+      setSortDir(col === "publishedAt" ? -1 : 1);
+    }
   };
 
   const clearFilters = () => {
@@ -164,6 +202,15 @@ export default function ActivosPage() {
 
   const selectedInFiltered = useMemo(() => filtered.filter(a => a.chk).map(a => a.id), [filtered]);
   const selectedCount = selectedInFiltered.length;
+  const exportSelection = useMemo(() => resolveAssetsForExport(filtered), [filtered]);
+  const excelTitle = exportSelection.source === "selected"
+    ? `Descarga ${exportSelection.assets.length} activo(s) seleccionado(s) dentro del filtro actual`
+    : `Sin selección: descarga los ${exportSelection.assets.length} activo(s) filtrados, de todas las páginas`;
+
+  const handleDownloadExcel = () => {
+    if (exportSelection.assets.length === 0) return;
+    downloadAssetsWorkbook(exportSelection.assets);
+  };
 
   const handleDeleteSelected = async () => {
     if (selectedCount === 0) return;
@@ -285,9 +332,10 @@ export default function ActivosPage() {
           </p>
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-muted">Ordenar:</span>
-            {([["prov", "Provincia"], ["pob", "Población"], ["sqm", "m²"], ["precio", "Precio"]] as const).map(([col, label]) => (
+            {([["prov", "Provincia"], ["pob", "Población"], ["sqm", "m²"], ["precio", "Precio"], ["publishedAt", "F. publicación"]] as const).map(([col, label]) => (
               <button
                 key={col}
+                type="button"
                 onClick={() => handleSort(col)}
                 className={`flex items-center gap-1 rounded-md border px-2.5 py-1 text-[11px] font-medium transition-all ${
                   sortCol === col ? "border-navy/20 bg-navy/5 text-navy" : "border-border bg-white text-muted hover:border-navy/20"
@@ -296,6 +344,15 @@ export default function ActivosPage() {
                 {label} <SortIcon col={col} />
               </button>
             ))}
+            <button
+              type="button"
+              onClick={handleDownloadExcel}
+              disabled={exportSelection.assets.length === 0}
+              title={excelTitle}
+              className="flex items-center gap-1.5 rounded-md border border-navy/20 bg-white px-2.5 py-1 text-[11px] font-medium text-navy transition-colors hover:bg-navy/5 disabled:opacity-40"
+            >
+              <Download size={12} /> Descargar Excel{exportSelection.assets.length > 0 ? ` (${exportSelection.assets.length})` : ""}
+            </button>
             {userIsAdmin && (
               <>
                 <div className="mx-0.5 hidden h-4 w-px self-center bg-border2 sm:block" aria-hidden />
@@ -313,16 +370,16 @@ export default function ActivosPage() {
         </div>
 
         {/* Table */}
-        <div className="overflow-hidden rounded-lg border border-border bg-white shadow-sm">
-          <div className="grid grid-cols-[32px_28px_72px_100px_100px_1fr_56px_56px_100px_minmax(6rem,1fr)_minmax(4.5rem,88px)_72px_90px_95px_28px] items-center gap-1.5 bg-navy px-3.5 py-2.5">
+        <div className="overflow-x-auto rounded-lg border border-border bg-white shadow-sm">
+          <div className={`grid ${ASSET_GRID} items-center gap-1.5 bg-navy px-3.5 py-2.5`}>
             <div
               className={`flex h-4 w-4 cursor-pointer items-center justify-center rounded-[3px] border-[1.5px] transition-all ${allChk ? "border-gold bg-gold text-white" : "border-white/25 hover:border-white/50"}`}
               onClick={() => toggleChkAll(filtered.map(a => a.id))}
             >{allChk && <Check size={10} strokeWidth={3} />}</div>
             <div />
-            {(["cat","prov","pob","addr","cp","sqm","tip","fase","proceso","deuda","pub","precio"] as SortCol[]).map(col => (
+            {TABLE_COLS.map(col => (
               <div key={col} className={`flex cursor-pointer select-none items-center gap-0.5 text-[10px] font-semibold uppercase tracking-wider transition-colors ${sortCol === col ? "text-gold" : "text-white/35 hover:text-white/60"}`} onClick={() => handleSort(col)}>
-                {{cat:"Cat.",prov:"Provincia",pob:"Población",addr:"Dirección",cp:"C.P.",sqm:"m²",tip:"Tipo",fase:"Situación",proceso:"Proceso",deuda:"Deuda",pub:"Estado",precio:"Precio"}[col]}
+                {SORT_LABELS[col]}
               </div>
             ))}
             <div />
@@ -337,7 +394,7 @@ export default function ActivosPage() {
                 href={`/admin/assets/${a.id}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="grid grid-cols-[32px_28px_72px_100px_100px_1fr_56px_56px_100px_minmax(6rem,1fr)_minmax(4.5rem,88px)_72px_90px_95px_28px] items-start gap-1.5 border-b border-border2 px-3.5 py-1.5 transition-colors last:border-b-0 hover:bg-cream/50 min-h-[46px]"
+                className={`grid ${ASSET_GRID} items-start gap-1.5 border-b border-border2 px-3.5 py-1.5 transition-colors last:border-b-0 hover:bg-cream/50 min-h-[46px]`}
               >
                 <div
                   className={`flex h-4 w-4 cursor-pointer items-center justify-center rounded-[3px] border-[1.5px] transition-all ${a.chk ? "border-navy bg-navy text-white" : "border-border hover:border-navy/40"}`}
@@ -382,6 +439,7 @@ export default function ActivosPage() {
                   <span className={`h-1.5 w-1.5 rounded-full ${a.pub ? "bg-green" : "bg-muted"}`} />
                   {a.pub ? "Publicado" : "No publicado"}
                 </button>
+                <PublicationDate asset={a} />
                 <span className="text-sm font-semibold text-navy">{fmt(a.precio)}</span>
                 <ChevronRight size={14} className="text-border" />
               </Link>

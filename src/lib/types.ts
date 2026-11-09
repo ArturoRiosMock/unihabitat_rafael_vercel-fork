@@ -107,6 +107,13 @@ export interface Asset {
   fullAddr: string;
   desc: string;
   pub: boolean;
+  /**
+   * Última publicación en el portal (ISO 8601). Se conserva al despublicar.
+   * `null` si nunca se publicó o si la columna aún no existe en la base.
+   */
+  publishedAt?: string | null;
+  /** Alta del registro (`assets.created_at`). Fallback si no hay `publishedAt`. */
+  createdAt?: string | null;
   age?: string;
   lat?: number | null;
   lng?: number | null;

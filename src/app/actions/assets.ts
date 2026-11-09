@@ -12,6 +12,7 @@ import {
   requireAdmin, requireAdminOrVendor, requireEditPermission, requireAssetAccess,
 } from "@/lib/auth-server";
 import { buildPublicSlug } from "@/lib/public-slug";
+import { isMissingPublishedAtColumn } from "@/lib/asset-publication";
 
 // PostgREST aplica `db-max-rows = 1000` por request; paginamos manualmente.
 const POSTGREST_PAGE_SIZE = 1000;
@@ -329,7 +330,7 @@ export async function fetchPropiedadesByInmuebleIds(ids: string[]): Promise<Prop
 /* ------------------------------------------------------------------ */
 
 const EMPTY_VALS = new Set(["—", ""]);
-const PRESERVE_FIELDS = new Set(["id", "created_at", "updated_at"]);
+const PRESERVE_FIELDS = new Set(["id", "created_at", "updated_at", "published_at"]);
 
 function isEmptyVal(v: unknown): boolean {
   if (v == null) return true;
@@ -596,8 +597,16 @@ export async function toggleAssetPub(id: string): Promise<boolean> {
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Inmueble no encontrado");
   const newPub = !data.pub;
-  const { error: updateErr } = await supabase
-    .from("assets").update({ pub: newPub }).eq("id", id);
+  // Al publicar se sella published_at. Al despublicar se conserva: es la
+  // última fecha de publicación y el listado sigue pudiendo ordenar por ella.
+  // Si la columna todavía no existe, se reintenta solo con `pub`.
+  const payload: { pub: boolean; published_at?: string } = { pub: newPub };
+  if (newPub) payload.published_at = new Date().toISOString();
+  let { error: updateErr } = await supabase.from("assets").update(payload).eq("id", id);
+  if (updateErr && newPub && isMissingPublishedAtColumn(updateErr)) {
+    const retry = await supabase.from("assets").update({ pub: true }).eq("id", id);
+    updateErr = retry.error;
+  }
   if (updateErr) throw new Error(updateErr.message);
 
   // Al publicar, recalcular matching y notificar compradores top.

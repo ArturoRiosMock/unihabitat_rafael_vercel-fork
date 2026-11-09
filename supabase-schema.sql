@@ -45,6 +45,8 @@ create table if not exists public.assets (
   owner_tel text default '—',
   owner_mail text default '—',
   pub boolean default false,
+  -- Última publicación en el portal. Se conserva al despublicar.
+  published_at timestamptz,
   age text,
   lat numeric,
   lng numeric,
