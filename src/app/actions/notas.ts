@@ -1,6 +1,7 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/auth-server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 
 export interface NotaRow {
   id: string;
@@ -39,4 +40,30 @@ export async function createNota(params: {
     text: params.text,
   });
   if (error) throw new Error(error.message);
+}
+
+/**
+ * Borra una nota individual. Solo el rol admin.
+ *
+ * Los agentes no pueden borrar notas (ni las suyas ni las de otros): hoy no
+ * había borrado y se mantiene así. La fila se elimina en `public.notas` con
+ * el cliente service-role, después de `requireAdmin()`, para que también
+ * funcione con la cookie de demo (dev-auth), cuyo `auth.uid()` no pasa
+ * `is_admin()`.
+ */
+export async function deleteNota(id: string): Promise<void> {
+  await requireAdmin();
+  const noteId = id.trim();
+  if (!noteId) throw new Error("Nota no válida");
+
+  const supabase = await createServiceClient();
+  const { data, error } = await supabase
+    .from("notas")
+    .delete()
+    .eq("id", noteId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Nota no encontrada");
 }
