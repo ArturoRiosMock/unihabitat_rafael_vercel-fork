@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { signOut } from "@/app/login/actions";
 import { canViewSection } from "@/lib/auth-helpers";
+import { isAdminSectionAllowed, shouldRedirectVendorToActivos } from "@/lib/admin-access";
 import { hrefToSection } from "@/lib/permissions";
 import type { SectionId } from "@/lib/permissions";
 import { useApp } from "@/lib/context";
@@ -62,23 +63,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   });
 
   const isGuiaStaging = pathname.startsWith("/admin/guia-staging");
-  const currentSection = hrefToSection(pathname);
-  const sectionAllowed =
-    isGuiaStaging
-      ? showStagingGuide && session?.role === "admin"
-      : !sessionResolved ||
-        !session ||
-        session.role === "admin" ||
-        !currentSection ||
-        currentSection === "config" ||
-        canViewSection(session, currentSection, permissions);
+  const access = {
+    session,
+    sessionResolved,
+    permissions,
+    currentSection: hrefToSection(pathname),
+    isGuiaStaging,
+    showStagingGuide,
+  };
+  const sectionAllowed = isAdminSectionAllowed(access);
+  const redirectToActivos = shouldRedirectVendorToActivos(access);
 
   useEffect(() => {
-    if (!sessionResolved || !session || session.role === "admin") return;
-    if (currentSection && !canViewSection(session, currentSection, permissions)) {
-      router.replace("/admin");
-    }
-  }, [sessionResolved, session, currentSection, permissions, router]);
+    if (redirectToActivos) router.replace("/admin");
+  }, [redirectToActivos, router]);
 
   if (!sessionResolved) return null;
 

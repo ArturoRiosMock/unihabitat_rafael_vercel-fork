@@ -28,6 +28,19 @@ const mocks = vi.hoisted(() => ({
   updatePropiedadFields: vi.fn(async () => undefined),
   updateAssetFields: vi.fn(async () => undefined),
   toast: { success: vi.fn(), error: vi.fn() },
+  fetchInformacionAdicional: vi.fn(async () => "Visible para el agente"),
+  saveInformacionAdicional: vi.fn(async () => undefined),
+  fetchDocumentos: vi.fn(async () => [] as Array<{
+    id: string;
+    asset_id: string | null;
+    comprador_id: string | null;
+    name: string;
+    storage_path: string;
+    icon_type: string;
+    size_bytes: number;
+    uploaded_by: string;
+    created_at: string;
+  }>),
 }));
 
 vi.mock("@/lib/context", () => ({
@@ -56,9 +69,14 @@ vi.mock("@/app/actions/notas", () => ({
 
 vi.mock("@/app/actions/documentos", () => ({
   uploadDocumento: vi.fn(),
-  fetchDocumentos: vi.fn(async () => []),
+  fetchDocumentos: (...args: unknown[]) => mocks.fetchDocumentos(...args),
   deleteDocumento: vi.fn(),
   getDocumentUrl: vi.fn(),
+}));
+
+vi.mock("@/app/actions/informacion-adicional", () => ({
+  fetchInformacionAdicional: (...args: unknown[]) => mocks.fetchInformacionAdicional(...args),
+  saveInformacionAdicional: (...args: unknown[]) => mocks.saveInformacionAdicional(...args),
 }));
 
 vi.mock("@/app/actions/compradores", () => ({
@@ -205,6 +223,11 @@ describe("Situación en la pestaña Características", () => {
     mocks.updatePropiedadFields.mockClear();
     mocks.toast.success.mockClear();
     mocks.toast.error.mockClear();
+    mocks.fetchInformacionAdicional.mockClear();
+    mocks.saveInformacionAdicional.mockClear();
+    mocks.fetchInformacionAdicional.mockResolvedValue("Visible para el agente");
+    mocks.fetchDocumentos.mockReset();
+    mocks.fetchDocumentos.mockResolvedValue([]);
     currentAsset = makeAsset("Reservado");
   });
 
@@ -321,5 +344,102 @@ describe("Deuda y proceso: una sola fuente", () => {
 
     expect(mocks.updatePropiedadFields).toHaveBeenCalledWith("PROP-1", { proceso: "Subasta" });
     expect(mocks.updateAssetFields).not.toHaveBeenCalled();
+  });
+});
+
+describe("Información Adicional entre descripción y notas", () => {
+  beforeEach(() => {
+    mocks.session.role = "admin";
+    mocks.fetchInformacionAdicional.mockResolvedValue("Visible para el agente");
+    mocks.saveInformacionAdicional.mockClear();
+    currentAsset = makeAsset("Reservado");
+  });
+
+  it("el admin la ve entre Descripción y Notas y puede guardarla", async () => {
+    const user = userEvent.setup();
+    renderFicha();
+
+    const info = await screen.findByRole("region", { name: "Información Adicional" });
+    const descripcion = screen.getByText("Descripción del Activo");
+    const notas = screen.getByText("Notas del activo");
+    expect(descripcion.compareDocumentPosition(info) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(info.compareDocumentPosition(notas) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    const campo = await screen.findByRole("textbox", { name: "Texto de información adicional" });
+    expect(campo).toHaveValue("Visible para el agente");
+    await user.clear(campo);
+    await user.type(campo, "Texto del admin");
+    await user.click(screen.getByRole("button", { name: "Guardar información adicional" }));
+
+    expect(mocks.saveInformacionAdicional).toHaveBeenCalledWith("ACT-1", "Texto del admin");
+  });
+
+  it("el agente lee el texto y no tiene control de escritura", async () => {
+    mocks.session.role = "vendedor";
+    renderFicha();
+
+    expect(await screen.findByText("Visible para el agente")).toBeVisible();
+    const info = screen.getByRole("region", { name: "Información Adicional" });
+    expect(info).toHaveTextContent("Visible para el agente");
+    expect(screen.queryByRole("textbox", { name: "Texto de información adicional" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Guardar información adicional" })).not.toBeInTheDocument();
+    expect(screen.getByText("Notas del activo")).toBeVisible();
+  });
+});
+
+describe("pestaña Documentación del agente", () => {
+  beforeEach(() => {
+    mocks.session.role = "vendedor";
+    currentAsset = makeAsset("Reservado");
+    mocks.fetchDocumentos.mockReset();
+  });
+
+  it("sigue en la ficha y muestra los PDF autorizados", async () => {
+    const user = userEvent.setup();
+    mocks.fetchDocumentos.mockResolvedValue([
+      {
+        id: "d1",
+        asset_id: "ACT-1",
+        comprador_id: null,
+        name: "nota-simple.pdf",
+        storage_path: "assets/ACT-1/nota-simple.pdf",
+        icon_type: "pdf",
+        size_bytes: 1200,
+        uploaded_by: "Admin",
+        created_at: "2026-03-01T00:00:00.000Z",
+      },
+      {
+        id: "d2",
+        asset_id: "ACT-1",
+        comprador_id: null,
+        name: "memoria-test.pdf",
+        storage_path: "assets/ACT-1/memoria-test.pdf",
+        icon_type: "pdf",
+        size_bytes: 2400,
+        uploaded_by: "Admin",
+        created_at: "2026-03-02T00:00:00.000Z",
+      },
+    ]);
+    renderFicha();
+
+    await user.click(await screen.findByRole("button", { name: "Documentación" }));
+
+    expect(await screen.findByText("nota-simple.pdf")).toBeVisible();
+    expect(screen.getByText("memoria-test.pdf")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Valdemoro, Madrid" })).toBeVisible();
+    expect(mocks.fetchDocumentos).toHaveBeenCalledWith({ assetId: "ACT-1" });
+  });
+
+  it("un acceso denegado se queda en la pestaña y no vacía la ficha", async () => {
+    const user = userEvent.setup();
+    mocks.fetchDocumentos.mockRejectedValue(new Error("Acceso denegado"));
+    renderFicha();
+
+    await user.click(await screen.findByRole("button", { name: "Documentación" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Acceso denegado");
+    expect(screen.getByRole("button", { name: "Documentación" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Valdemoro, Madrid" })).toBeVisible();
+    expect(screen.queryByText("No hay documentos subidos aún")).not.toBeInTheDocument();
   });
 });

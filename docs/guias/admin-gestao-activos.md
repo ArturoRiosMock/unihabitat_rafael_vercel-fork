@@ -75,9 +75,13 @@ Tab admin mostra propiedades ligadas — dados de devedor, dívida, fase judicia
 
 Upload de documentos (Supabase Storage) no separador **Documentación**. Já não há subseparador de notas: as notas do activo estão em **Características**.
 
-Entre **Descripción del Activo** e **Notas del activo** fica o sítio livre para um futuro quadro **Información Adicional** (só admin escreve, todos lêem). Ainda não existe.
+Entre **Descripción del Activo** e **Notas del activo** está o quadro **Información Adicional** (`asset_informacion_adicional`, uma fila por activo). O admin escreve; o admin e todos os agentes leem. O agente não tem botão de gravar e a server action `saveInformacionAdicional` recusa o rol vendedor. O comprador e o portal não leem esta tabela. Não mistura com **Notas del activo** nem com **Notas privadas**.
 
-**Descargar** (ficha `/admin/assets/[id]` → **Documentación**, admin e agente) abre uma URL firmada (`createSignedUrl`, 1 h). O bucket `documentos` é privado: não usar `getPublicUrl`. O mesmo vale para **Documentos** em `/portal/privado/inmueble/[slug]`.
+SQL idempotente: `supabase/migrations/20261109_informacion_adicional_y_documentos_agente.sql`. Não aplicar em produção neste passo; correr no SQL Editor de staging.
+
+**Descargar** (ficha `/admin/assets/[id]` → **Documentación**, admin e agente atribuído) abre uma URL firmada (`createSignedUrl`, 1 h). O bucket `documentos` é privado: não usar `getPublicUrl`. O mesmo vale para **Documentos** em `/portal/privado/inmueble/[slug]` (só filas com o `comprador_id` desse comprador).
+
+O agente só lista e assina documentos de activos presentes em `vendedor_assets`. Sem atribuição, a pestana mostra o erro e **não** volta ao listado `/admin`. A saída para `/admin` continua reservada a secções que o agente não pode ver, e só depois de os permissões terem carregado.
 
 ### Quem vê cada nota
 

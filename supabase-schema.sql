@@ -127,6 +127,7 @@ create table if not exists public.vendedores (
   agente text default 'Admin',
   tel text default '',
   email text default '',
+  user_id uuid references auth.users(id) on delete set null,
   ultimo text default '',
   estado text default '',
   estado_c text default 'fp-nd',
@@ -178,6 +179,15 @@ create table if not exists public.documentos (
   size_bytes bigint default 0,
   uploaded_by text default 'Admin',
   created_at timestamptz default now()
+);
+
+-- Texto interno entre «Descripción del Activo» y «Notas del activo».
+-- Admin escribe. Admin y agentes leen. No es una nota privada.
+create table if not exists public.asset_informacion_adicional (
+  asset_id text primary key references public.assets(id) on delete cascade,
+  texto text not null default '',
+  updated_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id) on delete set null
 );
 
 create table if not exists public.oportunidades (
@@ -307,6 +317,7 @@ alter table public.tareas enable row level security;
 alter table public.mensajes enable row level security;
 alter table public.notas enable row level security;
 alter table public.documentos enable row level security;
+alter table public.asset_informacion_adicional enable row level security;
 alter table public.oportunidades enable row level security;
 alter table public.notificaciones enable row level security;
 alter table public.ofertas enable row level security;
@@ -425,6 +436,22 @@ create policy "documentos_client_read" on public.documentos
   for select using (
     comprador_id in (select id from public.compradores where user_id = auth.uid())
   );
+create policy "documentos_agente_select" on public.documentos
+  for select using (
+    public.is_vendedor()
+    and asset_id is not null
+    and exists (
+      select 1 from public.vendedores v
+      join public.vendedor_assets va on va.vendedor_id = v.id
+      where v.user_id = auth.uid()
+        and va.asset_id = documentos.asset_id
+    )
+  );
+
+create policy "informacion_adicional_admin" on public.asset_informacion_adicional
+  for all using (public.is_admin()) with check (public.is_admin());
+create policy "informacion_adicional_agente_select" on public.asset_informacion_adicional
+  for select using (public.is_vendedor());
 
 -- OPORTUNIDADES: admin full access, clients see own
 create policy "oportunidades_admin" on public.oportunidades

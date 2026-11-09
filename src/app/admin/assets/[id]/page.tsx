@@ -22,6 +22,7 @@ import { InteractiveMap } from "@/components/InteractiveMap";
 import { EditableSection, type FieldDef } from "@/components/EditableSection";
 import { SituacionField } from "@/components/SituacionField";
 import { DeudaProcesoSummary } from "@/components/DeudaProcesoSummary";
+import { InformacionAdicionalCard } from "@/components/InformacionAdicionalCard";
 import { EditableExcelRawSection } from "@/components/EditableExcelRawSection";
 import { listEmptyExcelFields } from "@/lib/excel-raw-utils";
 import { FASE_INTERNA_OPTIONS, faseToCode } from "@/lib/fase-interna";
@@ -181,7 +182,11 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
             return (
               <button
                 key={t.contentIndex}
-                onClick={() => setTab(t.contentIndex)}
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  setTab(t.contentIndex);
+                }}
                 className={`flex items-center gap-2.5 border-l-[3px] px-4 py-2.5 text-left transition-all ${
                   tab === t.contentIndex ? "border-l-gold bg-white/[0.06] text-gold" : "border-l-transparent text-white/35 hover:bg-white/[0.03] hover:text-white/60"
                 } ${isAdminBtn && isLast ? "mt-auto border-t border-t-white/[0.06] pt-3" : ""}`}
@@ -195,7 +200,7 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto bg-cream p-6">
-          {tab === 0 && <TabCaracteristicas asset={asset} assetId={id} currentUser={currentUser} reloadAsset={loadRemote} canDeleteNotes={userIsAdmin} />}
+          {tab === 0 && <TabCaracteristicas asset={asset} assetId={id} currentUser={currentUser} reloadAsset={loadRemote} canDeleteNotes={userIsAdmin} canWriteInfo={userIsAdmin} />}
           {tab === 1 && <TabDocumentacion assetId={id} currentUser={currentUser} />}
           {tab === 2 && userIsAdmin && <TabAgentes asset={asset} assetId={id} currentUser={currentUser} canDeleteNotes={userIsAdmin} />}
           {tab === 3 && userIsAdmin && <TabClientes assetId={id} />}
@@ -297,6 +302,7 @@ function DocItemRow({ doc, onDelete }: { doc: DocRow; onDelete?: () => void }) {
       </div>
       <div className="flex items-center gap-2">
         <button
+          type="button"
           onClick={handleDownload}
           disabled={downloading}
           className="flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-navy hover:bg-cream disabled:opacity-50"
@@ -305,6 +311,7 @@ function DocItemRow({ doc, onDelete }: { doc: DocRow; onDelete?: () => void }) {
         </button>
         {onDelete && (
           <button
+            type="button"
             onClick={onDelete}
             className="flex items-center gap-1 rounded-md border border-red/20 px-2.5 py-1.5 text-xs font-medium text-red hover:bg-red/5"
           >
@@ -316,7 +323,7 @@ function DocItemRow({ doc, onDelete }: { doc: DocRow; onDelete?: () => void }) {
   );
 }
 
-function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset, canDeleteNotes }: { asset: Asset; assetId: string; currentUser: { nombre: string; email: string } | null; reloadAsset: () => void; canDeleteNotes: boolean }) {
+function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset, canDeleteNotes, canWriteInfo }: { asset: Asset; assetId: string; currentUser: { nombre: string; email: string } | null; reloadAsset: () => void; canDeleteNotes: boolean; canWriteInfo: boolean }) {
   const { compradores, session } = useApp();
   const isAgente = session?.role === "vendedor";
   const canEditSituacion = isAdmin(session);
@@ -839,8 +846,7 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset, canDelet
           </button>
         </div>
       </SectionCard>
-      {/* Hueco reservado: «Información Adicional» (solo admin escribe, todos leen)
-          irá aquí, entre Descripción del Activo y Notas del activo. */}
+      <InformacionAdicionalCard assetId={assetId} canWrite={canWriteInfo} />
       <div className="mt-3">
         <SectionCard title="Notas del activo">
           <p className="mb-2 text-[11px] text-muted">
@@ -903,6 +909,7 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset, canDelet
 function TabDocumentacion({ assetId, currentUser }: { assetId: string; currentUser: { nombre: string; email: string } | null }) {
   const [docs, setDocs] = useState<DocRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [uploadSuccess, setUploadSuccess] = useState(false);
@@ -916,11 +923,16 @@ function TabDocumentacion({ assetId, currentUser }: { assetId: string; currentUs
 
   const loadData = async () => {
     setLoading(true);
+    setLoadError("");
     try {
       const fetched = await fetchDocumentos({ assetId });
       setDocs(fetched);
     } catch (err) {
+      // El fallo se queda en la pestaña. No hay navegación a /admin:
+      // un documento ajeno es «Acceso denegado», no una sección prohibida.
       console.error("Error cargando datos:", err);
+      setDocs([]);
+      setLoadError(err instanceof Error ? err.message : "No se pudieron cargar los documentos");
     } finally {
       setLoading(false);
     }
@@ -1025,11 +1037,16 @@ function TabDocumentacion({ assetId, currentUser }: { assetId: string; currentUs
               <CheckCircle2 size={14} /> Archivo subido correctamente
             </div>
           )}
+          {loadError ? (
+            <div role="alert" className="mb-3 flex items-center gap-2 rounded-lg border border-red/20 bg-red/10 px-3 py-2 text-xs text-red">
+              <AlertCircle size={14} /> {loadError}
+            </div>
+          ) : null}
           {loading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 size={24} className="animate-spin text-gold" />
             </div>
-          ) : docs.length === 0 ? (
+          ) : loadError ? null : docs.length === 0 ? (
             <div className="rounded-lg border border-border bg-white p-6 text-center text-sm text-muted">
               No hay documentos subidos aún
             </div>

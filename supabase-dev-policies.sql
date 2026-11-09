@@ -35,7 +35,9 @@ create policy "mensajes_anon_insert" on public.mensajes for insert with check (t
 -- No hay DELETE anónimo. Borrar una nota es solo admin
 -- (política notas_admin_delete + server action deleteNota).
 
--- Documentos
+-- Documentos: lectura anónima de desarrollo. No añadir lo mismo sobre
+-- asset_informacion_adicional: ese cuadro no es público (admin escribe,
+-- agentes leen; ver 20261109_informacion_adicional_y_documentos_agente.sql).
 create policy "documentos_anon_select" on public.documentos for select using (true);
 create policy "documentos_anon_insert" on public.documentos for insert with check (true);
 create policy "documentos_anon_delete" on public.documentos for delete using (true);

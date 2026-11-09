@@ -73,6 +73,10 @@ Writes sensíveis usam **service-role** nas server actions (bypass RLS controlad
 
 **Notas de activo:** `fetchNotas` / `createNota` filtram no servidor (service role, para a cookie demo). O agente só recebe notas de activo com o seu `author_id` (ou o nome, nas linhas antigas sem id). O admin recebe todas do alcance pedido. `scope = privada` só admin. `deleteNota` exige `requireAdmin()`. Não há política DELETE para vendedor nem comprador. No PostgREST, SELECT de agente é `notas_agente_select` e o DELETE directo só passa com `public.is_admin()` (`notas_admin_delete`).
 
+**Información adicional:** tabela `asset_informacion_adicional`, uma fila por activo. `fetchInformacionAdicional` deixa admin e vendedor. `saveInformacionAdicional` recusa quem não é admin. RLS: `informacion_adicional_admin` (ALL) e `informacion_adicional_agente_select` (SELECT). Sem política para anon nem comprador. Não lê `notas`.
+
+**Documentos:** `fetchDocumentos` / `getDocumentUrl` usam service role depois da sessão. Admin vê tudo. Vendedor só se `vendedor_assets` contém o activo. Comprador só filas com o seu `comprador_id`. `getDocumentUrl` assina com `createSignedUrl` (1 h) e não chama `getPublicUrl`. A política `documentos_agente_select` repete o SELECT do agente no PostgREST. `documentos_admin` e `documentos_client_read` mantêm-se.
+
 ## Ficheiros relacionados
 
 - [`src/middleware.ts`](../../src/middleware.ts)

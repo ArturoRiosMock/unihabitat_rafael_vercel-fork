@@ -20,6 +20,7 @@
 | `supabase/migrations/20261109_assets_published_at.sql` | Coluna `assets.published_at` (última publicação; backfill com `created_at`) |
 | `supabase/migrations/20261109_notas_admin_delete.sql` | DELETE de `notas` só com `is_admin()`. Sem política de borrado para agente ou comprador |
 | `supabase/migrations/20261109_notas_select_visibilidad.sql` | `notas.author_id` + `notas.scope`. SELECT: agente só as suas notas de activo; comprador só as suas; notas privadas ficam no `notas_admin`. Não altera `notas_admin_delete` |
+| `supabase/migrations/20261109_informacion_adicional_y_documentos_agente.sql` | Tabela `asset_informacion_adicional` (admin escreve, agente só SELECT) e `documentos_agente_select` para activos em `vendedor_assets`. Não mexe nas políticas de notas |
 
 Situación não precisa de SQL: usa `propiedades.fase_interna`, criada em `supabase-migration-inmuebles-propiedades.sql`.
 | `supabase-migration-documentos-bucket.sql` | Bucket privado `documentos` + RLS de storage. As descargas usam `createSignedUrl` (não `getPublicUrl`) |
@@ -27,7 +28,7 @@ Situación não precisa de SQL: usa `propiedades.fase_interna`, criada em `supab
 ## Ordem sugerida (novo ambiente)
 
 1. `supabase-schema.sql`
-2. Migrações incrementais por data/necessidade (excel-raw, map-columns, comprador-assets, inmuebles-propiedades, agentes, categoria-libre, comprador-acceso, `supabase/migrations/20261109_assets_published_at.sql`, `supabase/migrations/20261109_notas_admin_delete.sql`, `supabase/migrations/20261109_notas_select_visibilidad.sql`, `supabase-migration-documentos-bucket.sql`)
+2. Migrações incrementais por data/necessidade (excel-raw, map-columns, comprador-assets, inmuebles-propiedades, agentes, categoria-libre, comprador-acceso, `supabase/migrations/20261109_assets_published_at.sql`, `supabase/migrations/20261109_notas_admin_delete.sql`, `supabase/migrations/20261109_notas_select_visibilidad.sql`, `supabase/migrations/20261109_informacion_adicional_y_documentos_agente.sql`, `supabase-migration-documentos-bucket.sql`)
 3. `supabase-dev-policies.sql` — **apenas dev**
 
 **Atenção:** `supabase-migration-inmuebles-propiedades.sql` pode truncar dados legacy de assets — rever antes de aplicar em produção.
