@@ -2,7 +2,7 @@
 
 > **Propósito:** Ordem e propósito dos ficheiros SQL do repositório.  
 > **Público:** Desenvolvedores / DevOps.  
-> **Última verificação:** 2026-06-12
+> **Última verificação:** 2026-11-09
 
 ## Ficheiros na raiz
 
@@ -17,11 +17,12 @@
 | `supabase-dev-policies.sql` | Políticas RLS permissivas para desenvolvimento |
 | `supabase-migration-categoria-libre.sql` | Remove CHECK de categoría; valores libres (Excel) |
 | `supabase-migration-comprador-acceso.sql` | Coluna `compradores.acceso` (`sin_acceso` \| `activo`) |
+| `supabase/migrations/20261109_assets_published_at.sql` | Coluna `assets.published_at` (última publicação; backfill com `created_at`) |
 
 ## Ordem sugerida (novo ambiente)
 
 1. `supabase-schema.sql`
-2. Migrações incrementais por data/necessidade (excel-raw, map-columns, comprador-assets, inmuebles-propiedades, agentes, categoria-libre, comprador-acceso)
+2. Migrações incrementais por data/necessidade (excel-raw, map-columns, comprador-assets, inmuebles-propiedades, agentes, categoria-libre, comprador-acceso, `supabase/migrations/20261109_assets_published_at.sql`)
 3. `supabase-dev-policies.sql` — **apenas dev**
 
 **Atenção:** `supabase-migration-inmuebles-propiedades.sql` pode truncar dados legacy de assets — rever antes de aplicar em produção.

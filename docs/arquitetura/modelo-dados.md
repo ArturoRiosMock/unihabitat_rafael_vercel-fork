@@ -2,7 +2,7 @@
 
 > **Propósito:** Explicar a separação Inmueble (Asset) vs Propiedad (carga) e o mapeamento DB.  
 > **Público:** Desenvolvedores e operação (conceitos).  
-> **Última verificação:** 2026-06-12
+> **Última verificação:** 2026-11-09
 
 ## Conceito central
 
@@ -44,7 +44,7 @@ Campos principais em [`src/lib/types.ts`](../../src/lib/types.ts):
 
 - **Identificação:** `id` (= referência catastral), endereço (`prov`, `pob`, `cp`, `addr`, `fullAddr`)
 - **Tipologia:** `tip`, `tipC`, `bien`, `clase`, `uso`
-- **Comercial:** `precio`, `desc`, `pub` (publicado no portal)
+- **Comercial:** `precio`, `desc`, `pub` (publicado no portal), `publishedAt` (`assets.published_at`, última publicação; conservada ao despublicar). `fecha_lanzamiento` continua a ser texto da carga, não a data de publicação.
 - **Físico:** `sqm`, coordenadas `lat`/`lng`, `map` (URL mapa estático)
 - **Relação:** `propiedades: Propiedad[]` (embebido após fetch)
 

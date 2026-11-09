@@ -5,6 +5,7 @@ import { useApp } from "@/lib/context";
 import { isAdmin } from "@/lib/auth-helpers";
 import Link from "next/link";
 import type { Asset } from "@/lib/types";
+import { publicationListLabel } from "@/lib/asset-publication";
 import { Home, FolderOpen, Briefcase, Users, Lock, ArrowLeft, Upload, Download, FileText, FileSpreadsheet, Image, MessageSquare, Save, Plus, Mail, X, Loader2, AlertCircle, CheckCircle2, CheckCircle, Building, ExternalLink, RefreshCw, UserCog, Send, Link2 } from "lucide-react";
 import { uploadDocumento, fetchDocumentos, deleteDocumento, getDocumentUrl, type DocRow } from "@/app/actions/documentos";
 import { createNota, fetchNotas, type NotaRow } from "@/app/actions/notas";
@@ -118,6 +119,8 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
     </div>
   );
 
+  const publication = publicationListLabel(asset);
+
   return (
     <>
       {/* Topbar */}
@@ -158,6 +161,9 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
           </button>
           <span className={`text-xs font-semibold ${asset.pub ? "text-green" : "text-red"}`}>
             {toggling ? "Actualizando..." : asset.pub ? "Publicado" : "Suspendido"}
+          </span>
+          <span className="text-[11px] text-muted" title={publication.title}>
+            Publicación: {publication.text}
           </span>
         </div>
       </div>
@@ -1502,6 +1508,9 @@ function TabAdmin({ asset, assetId, togglePub, currentUser, reloadAsset }: { ass
             </button>
             <span className={`text-xs font-semibold ${asset.pub ? "text-green" : "text-red"}`}>{asset.pub ? "Publicado" : "Suspendido"}</span>
           </div>
+          <p className="mb-3 text-[11px] text-muted" title={publicationListLabel(asset).title}>
+            Fecha de publicación: {publicationListLabel(asset).text}
+          </p>
           <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted">Fase interna</p>
           <select
             value={faseInterna === "—" ? "" : faseInterna}
