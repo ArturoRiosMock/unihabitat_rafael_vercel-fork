@@ -20,8 +20,6 @@ export interface NotaRow {
   created_at: string;
 }
 
-export type { NotaScope };
-
 async function buyerIdFor(session: UserSession): Promise<string | null> {
   if (session.compradorId) return session.compradorId;
   if (session.role !== "cliente") return null;
