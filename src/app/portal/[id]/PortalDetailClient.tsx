@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { fmt, fmtM, shortAddr, formatFullAddress, getDescriptionText, getCategoria, getPortalPriceDisplay } from "@/lib/utils";
+import { fmt, fmtM, shortAddr, formatFullAddress, getDescriptionText, getCategoria, getPortalPriceDisplay, displaySituacion } from "@/lib/utils";
 import { assetPortalHref } from "@/lib/public-slug";
 import type { Asset } from "@/lib/types";
 import Link from "next/link";
@@ -217,6 +217,7 @@ export default function PortalDetailClient({ asset, siblings }: PortalDetailClie
                   <InfoPill icon={<Home size={13} />} label="Tipo inmueble" value={asset.bien} />
                   <InfoPill icon={<Building size={13} />} label="Tipología" value={asset.tip} />
                   <InfoPill icon={<Tag size={13} />} label="Categoría" value={getCategoria(asset)} />
+                  <InfoPill icon={<Tag size={13} />} label="Situación" value={displaySituacion(asset)} />
                   <InfoPill icon={<Ruler size={13} />} label="Sup. Construida" value={asset.supC || fmtM(asset.sqm)} />
                   {asset.supG && <InfoPill icon={<Ruler size={13} />} label="Sup. Gráfica" value={asset.supG} />}
                   {asset.clase && <InfoPill icon={<Layers size={13} />} label="Clase" value={asset.clase} />}

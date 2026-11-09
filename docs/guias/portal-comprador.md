@@ -2,7 +2,7 @@
 
 > **Propósito:** Guia da experiência do comprador no portal público e privado.  
 > **Público:** Operação e suporte.  
-> **Última verificação:** 2026-06-12
+> **Última verificação:** 2026-11-09
 
 ## Portal público (`/portal`)
 
@@ -14,6 +14,8 @@ Qualquer visitante pode:
 - Abrir ficha `/portal/[id]`
 
 **Dados sensíveis** (localização exacta, contactos devedor, etc.) ficam ocultos para visitantes não autenticados.
+
+A ficha pública (`/portal/[id]` e `/portal/inmueble/[slug]`) mostra **Situación** só em leitura na secção **Características**. É a fase interna (`propiedades.fase_interna`), o mesmo valor da ficha admin. Vazio → «—». O comprador não edita. Os filtros do catálogo continuam sem Situación (pedido anterior: ocultar esse filtro e deixar só categoria, província, população e tipologia).
 
 Staff (admin/vendedor autenticado) vê o catálogo completo, incluindo não publicados.
 
@@ -29,6 +31,7 @@ O comprador vê:
 
 ### Ficha do imóvel (autenticado)
 
+- **Información completa** (`/portal/privado/inmueble/[slug]`, separador Información) inclui **Situación** só em leitura. Mesma origem que a ficha pública. Vazio → «—».
 - Dados sensíveis visíveis conforme permissões
 - **Solicitar información** — formulario → email interno ([`email-info-request.ts`](../../src/app/actions/email-info-request.ts))
 - **Submeter oferta** — valor em € + comentários → fluxo em `/portal/privado/ofertas`

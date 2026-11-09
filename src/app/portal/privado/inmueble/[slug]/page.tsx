@@ -6,7 +6,7 @@ import { createNota, fetchNotas, type NotaRow } from "@/app/actions/notas";
 import { fetchDocumentos, getDocumentUrl, type DocRow } from "@/app/actions/documentos";
 import { ensureCompradorForEmail } from "@/app/actions/compradores";
 import type { Asset } from "@/lib/types";
-import { fmtM, getDescriptionText, getPortalPriceDisplay } from "@/lib/utils";
+import { displaySituacion, fmtM, getDescriptionText, getPortalPriceDisplay } from "@/lib/utils";
 import { useFavoritos } from "@/hooks/useFavoritos";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
@@ -135,6 +135,7 @@ export default function PortalPrivadoInmuebleSlugPage({
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <InfoPill label="Tipo" value={asset.bien} />
+                <InfoPill label="Situación" value={displaySituacion(asset)} />
                 <InfoPill label="Municipio" value={asset.pob} />
                 <InfoPill label="Provincia" value={asset.prov} />
                 <InfoPill label="CCAA" value={asset.ccaa} />

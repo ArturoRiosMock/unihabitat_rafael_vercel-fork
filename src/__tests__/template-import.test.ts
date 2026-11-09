@@ -217,6 +217,21 @@ describe("parseTemplateExcel — contraejemplos plan (CE-1, CE-2, CE-3)", () => 
     expect(r.inmuebles).toHaveLength(1);
     expect(r.inmuebles[0].referencia).toBe("1890034VK1419S0010DS");
     expect(r.propiedades[0].activoId).toBe("ESC-HO-01-1200");
+    expect(r.propiedades[0].faseInterna).toBe("Seguimiento");
+  });
+
+  it("acepta la columna Situación del export como fase interna", async () => {
+    const wb = await import("xlsx");
+    const ws = wb.utils.aoa_to_sheet([
+      ["Categoria", "Situación", "Referencia Catastral", "ID1", "Publicar"],
+      ["CDR", "Ofertado", "1890014VK1419S0004XO", "ESC-HO-01-1616", "SI"],
+    ]);
+    const workbook = wb.utils.book_new();
+    wb.utils.book_append_sheet(workbook, ws, "Hoja1");
+    const buf = wb.write(workbook, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+    const r = await parseTemplateExcel(fileFromArrayBuffer("situacion.xlsx", buf));
+    expect(r.propiedades[0].faseInterna).toBe("Ofertado");
+    expect(r.propiedades[0].faseC).toBe("fp-ofe");
   });
 
   it("persiste categoría OCUPADO sin forzar a CDR", async () => {

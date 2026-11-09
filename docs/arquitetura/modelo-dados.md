@@ -53,6 +53,7 @@ Campos principais em [`src/lib/types.ts`](../../src/lib/types.ts):
 - **Ligação:** `inmuebleId` → `Asset.id`, `activoId` → coluna Excel `ID1`
 - **Categoria:** `CDR` | `NPL` — determina colunas extra no parser
 - **Comercial/judicial:** `propietario`, `deuda`, `faseInterna`, `proceso`, `portfolio`, etc.
+- **Situación** na UI (ficha admin Características, ficha pública Características e portal privado Información completa) é `faseInterna` da primeira propiedad. Coluna `propiedades.fase_interna` (já existe; sem migração nova). Carga Excel: cabeçalho **Fase Interna**, com alias **Situación**. Export admin: coluna **Situación**.
 - **Auditoria:** `excelRaw` — linha original por folha/cabeçalho
 
 Campos que antes viviam em `asset.adm.*` devem ser lidos de `asset.propiedades[]`.

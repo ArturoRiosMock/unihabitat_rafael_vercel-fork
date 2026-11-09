@@ -19,6 +19,8 @@
 | `supabase-migration-comprador-acceso.sql` | Coluna `compradores.acceso` (`sin_acceso` \| `activo`) |
 | `supabase/migrations/20261109_assets_published_at.sql` | Coluna `assets.published_at` (última publicação; backfill com `created_at`) |
 | `supabase/migrations/20261109_notas_admin_delete.sql` | DELETE de `notas` só com `is_admin()`. Sem política de borrado para agente ou comprador |
+
+Situación não precisa de SQL: usa `propiedades.fase_interna`, criada em `supabase-migration-inmuebles-propiedades.sql`.
 | `supabase-migration-documentos-bucket.sql` | Bucket privado `documentos` + RLS de storage. As descargas usam `createSignedUrl` (não `getPublicUrl`) |
 
 ## Ordem sugerida (novo ambiente)

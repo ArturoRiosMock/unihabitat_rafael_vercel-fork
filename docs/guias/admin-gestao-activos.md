@@ -43,6 +43,16 @@ Na ficha do imóvel — secção clientes convidados:
 
 Atribuir vendedor ao imóvel ou comprador na ficha ou secção Agentes.
 
+## Situación (Características)
+
+Na ficha `/admin/assets/[id]`, separador **Características**, coluna direita (por baixo de **Precio** e por cima de Deuda/Proceso, quando existem):
+
+- Etiqueta **Situación**, sempre visível.
+- Valor = fase interna da primeira propriedade (`propiedades.fase_interna`). Não há coluna nova: o campo já vem da carga Excel **Fase Interna** (o export do ponto 4 chama a mesma coluna **Situación**; a carga também aceita esse alias).
+- **Admin:** select com o enum de fase interna (Disponible, Seguimiento, Info. Solicitada, Ofertado, Negociación, Reservado, Cerrado, No Disponible) mais um valor legado se o Excel trouxe outro texto. Grava `fase_interna` e `fase_c` com `updatePropiedadFields`. É o mesmo campo do selector **Fase interna** no separador Administrador.
+- **Agente:** só leitura, mesmo que possa editar outros campos da ficha.
+- Vazio, espaços ou «—» → **—**. Sem propriedade associada, o admin também vê **—** (não há fila para gravar).
+
 ## Propiedades (cargas)
 
 Tab admin mostra propiedades ligadas — dados de devedor, dívida, fase judicial, `excelRaw` editável.
