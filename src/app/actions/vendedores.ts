@@ -7,6 +7,7 @@ import { asignacionReiniciaPlazo, canReadComprador } from "@/lib/comprador-gesti
 import { fetchAssignedVendedorId } from "@/lib/comprador-gestion-run";
 import { createNotificacion } from "@/app/actions/notificaciones";
 import { inviteAgenteByEmail } from "@/lib/auth/agente-invite";
+import { nombreCompleto } from "@/lib/comprador-oferta";
 import type { Vendedor } from "@/lib/types";
 
 /* ------------------------------------------------------------------ */
@@ -367,10 +368,13 @@ export async function setCompradorAgente(
   // 4. Notificación al agente.
   const { data: cRow } = await sb
     .from("compradores")
-    .select("nombre, email")
+    .select("nombre, apellidos, email")
     .eq("id", compradorId)
     .maybeSingle();
-  const compradorNombre = (cRow?.nombre as string | undefined) || "un comprador";
+  const compradorNombre = nombreCompleto(
+    cRow?.nombre as string | undefined,
+    cRow?.apellidos as string | undefined,
+  ) || "un comprador";
   await notifyAgente({
     vendedorId,
     tipo: "asignacion_comprador",

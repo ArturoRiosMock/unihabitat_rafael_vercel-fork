@@ -25,23 +25,45 @@ vi.mock("@/lib/email/templates", () => ({
   offerTemplate: vi.fn(() => ({ subject: "oferta", html: "<p>ok</p>", text: "ok" })),
 }));
 
+const COMPRADOR_FIRMA = {
+  id: "C1",
+  nombre: "Ana",
+  apellidos: "García",
+  tipo_persona: "fisica",
+  razon_social: "",
+  documento: "12345678Z",
+  direccion: "Calle Mayor 1",
+  cp: "28001",
+  poblacion: "Madrid",
+  provincia: "Madrid",
+  pais: "España",
+  tel: "600111222",
+  email: "ana@example.com",
+};
+
 /**
  * Mock Supabase service client for createOfertaAdmin:
  * assets/compradores/vendedores lookup via maybeSingle, insert via select().single().
+ * El comprador por defecto tiene la ficha de firma completa.
  */
 function makeOfertaSupabaseMock(opts: {
   asset?: { id: string } | null;
-  comprador?: { id: string } | null;
+  comprador?: Record<string, unknown> | null;
   vendedor?: { id: string } | null;
   insertRow?: Record<string, unknown>;
   insertError?: { message: string } | null;
 }) {
+  const compradorRow = opts.comprador === null
+    ? null
+    : { ...COMPRADOR_FIRMA, ...(opts.comprador ?? {}) };
   const insertSingle = vi.fn(async () => ({
     data: opts.insertError ? null : (opts.insertRow ?? null),
     error: opts.insertError ?? null,
   }));
   const insertSelect = vi.fn(() => ({ single: insertSingle }));
   const insert = vi.fn(() => ({ select: insertSelect }));
+  const updateEq = vi.fn(async () => ({ error: null }));
+  const update = vi.fn(() => ({ eq: updateEq }));
 
   const from = vi.fn((table: string) => {
     if (table === "assets") {
@@ -61,11 +83,12 @@ function makeOfertaSupabaseMock(opts: {
         select: vi.fn(() => ({
           eq: vi.fn(() => ({
             maybeSingle: vi.fn(async () => ({
-              data: opts.comprador === undefined ? { id: "C1" } : opts.comprador,
+              data: compradorRow,
               error: null,
             })),
           })),
         })),
+        update,
       };
     }
     if (table === "vendedores") {
@@ -95,7 +118,7 @@ function makeOfertaSupabaseMock(opts: {
     };
   });
 
-  return { client: { from }, spies: { from, insert, insertSingle } };
+  return { client: { from }, spies: { from, insert, insertSingle, update } };
 }
 
 describe("createOfertaAdmin", () => {
@@ -256,6 +279,83 @@ describe("createOfertaAdmin", () => {
         estado: "pendiente",
       }),
     );
+  });
+
+  it("rechaza la oferta si faltan datos de firma y no inserta", async () => {
+    const sb = makeOfertaSupabaseMock({
+      asset: { id: "A1" },
+      comprador: { id: "C1", apellidos: "", documento: "" },
+    });
+    vi.doMock("@/lib/supabase/server", () => ({
+      createClient: vi.fn(async () => sb.client),
+      createServiceClient: vi.fn(async () => sb.client),
+    }));
+    const { createOfertaAdmin } = await import("@/app/actions/ofertas");
+
+    await expect(
+      createOfertaAdmin({
+        compradorId: "C1",
+        assetId: "A1",
+        propuestaEuros: 1000,
+      }),
+    ).rejects.toThrow(/Faltan datos para firmar la oferta/);
+    expect(sb.spies.insert).not.toHaveBeenCalled();
+  });
+
+  it("guarda en la ficha los datos que completa la oferta y luego inserta", async () => {
+    const row = {
+      id: "O3",
+      comprador_id: "C1",
+      vendedor_id: null,
+      asset_id: "A1",
+      propuesta_euros: 80000,
+      comentarios: null,
+      estado: "pendiente",
+      nda_enviado_at: null,
+      nda_firmado_at: null,
+      created_at: "2026-01-01",
+      updated_at: "2026-01-01",
+    };
+    const sb = makeOfertaSupabaseMock({
+      asset: { id: "A1" },
+      comprador: { id: "C1", apellidos: "", documento: "" },
+      insertRow: row,
+    });
+    vi.doMock("@/lib/supabase/server", () => ({
+      createClient: vi.fn(async () => sb.client),
+      createServiceClient: vi.fn(async () => sb.client),
+    }));
+    const { createOfertaAdmin } = await import("@/app/actions/ofertas");
+
+    const out = await createOfertaAdmin({
+      compradorId: "C1",
+      assetId: "A1",
+      propuestaEuros: 80000,
+      datos: {
+        nombre: "Ana",
+        apellidos: "García López",
+        tipoPersona: "fisica",
+        razonSocial: "",
+        documento: "12345678z",
+        direccion: "Calle Mayor 1",
+        cp: "28001",
+        poblacion: "Madrid",
+        provincia: "Madrid",
+        pais: "España",
+        tel: "600111222",
+        email: "ana@example.com",
+      },
+    });
+
+    expect(out.id).toBe("O3");
+    expect(sb.spies.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apellidos: "García López",
+        documento: "12345678Z",
+        ini: "AG",
+      }),
+    );
+    expect(sb.spies.insert).toHaveBeenCalled();
   });
 
   it("lanza error si el activo no existe", async () => {

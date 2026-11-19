@@ -2,6 +2,7 @@
 
 import { createServiceClient } from "@/lib/supabase/server";
 import { createNotificacion } from "@/app/actions/notificaciones";
+import { nombreCompleto } from "@/lib/comprador-oferta";
 
 export async function fetchFavoritosByComprador(compradorId: string): Promise<string[]> {
   if (!compradorId) return [];
@@ -36,10 +37,10 @@ export async function addFavorito(
   // Notificar admin / agente asignado (best-effort).
   try {
     const [{ data: comp }, { data: agentLink }] = await Promise.all([
-      supabase.from("compradores").select("nombre, email, agente").eq("id", compradorId).maybeSingle(),
+      supabase.from("compradores").select("nombre, apellidos, email, agente").eq("id", compradorId).maybeSingle(),
       supabase.from("vendedor_compradores").select("vendedor_id").eq("comprador_id", compradorId).maybeSingle(),
     ]);
-    const nombre = comp?.nombre ?? compradorId;
+    const nombre = nombreCompleto(comp?.nombre as string | undefined, comp?.apellidos as string | undefined) || compradorId;
     const mensaje = `${nombre} marcó como favorito el activo ${assetId}`;
 
     if (agentLink?.vendedor_id) {

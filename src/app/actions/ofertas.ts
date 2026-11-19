@@ -9,7 +9,16 @@ import { displayCommentAuthor } from "@/lib/comment-author";
 import { canReadComprador, eventoRenuevaGestion } from "@/lib/comprador-gestion";
 import { fetchAssignedVendedorId, touchUltimaGestionAgente } from "@/lib/comprador-gestion-run";
 import { fetchCompradorByEmail } from "@/app/actions/compradores";
+import {
+  datosFirmaFromRow,
+  mergeDatosFirma,
+  nombreCompleto,
+  patchDatosFirma,
+  validarDatosFirma,
+  type DatosFirma,
+} from "@/lib/comprador-oferta";
 import type { UserSession } from "@/lib/permissions";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export interface OfertaRow {
   id: string;
@@ -54,6 +63,37 @@ function presentOferta(row: OfertaRow): OfertaRow {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+const FIRMA_COLUMNS =
+  "nombre, apellidos, tipo_persona, razon_social, documento, direccion, cp, poblacion, provincia, pais, tel, email";
+
+/**
+ * La oferta con comprador no se envía si faltan datos de firma.
+ * Lo que el formulario complete se guarda en la ficha antes del insert.
+ */
+async function exigirDatosFirma(
+  sb: SupabaseClient,
+  compradorId: string,
+  datos: DatosFirma | undefined,
+): Promise<void> {
+  const { data, error } = await sb
+    .from("compradores")
+    .select(FIRMA_COLUMNS)
+    .eq("id", compradorId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Comprador no encontrado");
+
+  const stored = datosFirmaFromRow(data);
+  const merged = mergeDatosFirma(stored, datos);
+  const check = validarDatosFirma(merged);
+  if (!check.ok) throw new Error(check.error);
+
+  const patch = patchDatosFirma(stored, check.datos);
+  if (Object.keys(patch).length === 0) return;
+  const { error: updateError } = await sb.from("compradores").update(patch).eq("id", compradorId);
+  if (updateError) throw new Error(updateError.message);
+}
+
 async function notifyOfferRecipients(
   ofertaId: string,
   assetId: string,
@@ -71,7 +111,7 @@ async function notifyOfferRecipients(
           .eq("id", assetId)
           .maybeSingle(),
         compradorId
-          ? sb.from("compradores").select("nombre, email, tel").eq("id", compradorId).maybeSingle()
+          ? sb.from("compradores").select(FIRMA_COLUMNS).eq("id", compradorId).maybeSingle()
           : Promise.resolve({ data: null }),
         vendedorId
           ? sb.from("vendedores").select("nombre, email").eq("id", vendedorId).maybeSingle()
@@ -101,15 +141,27 @@ async function notifyOfferRecipients(
     const buyerEmail = (compRow?.email as string | undefined)?.trim()
       ?? (vendRow?.email as string | undefined)?.trim()
       ?? "";
-    const buyerNombre = (compRow?.nombre as string | undefined)
-      ?? (vendRow?.nombre as string | undefined)
-      ?? (vendedorId ? "Agente" : "Comprador");
+    const buyerNombre = compRow
+      ? nombreCompleto(compRow.nombre as string | undefined, compRow.apellidos as string | undefined)
+      : ((vendRow?.nombre as string | undefined) ?? (vendedorId ? "Agente" : "Comprador"));
+    const domicilio = compRow
+      ? [
+          compRow.direccion,
+          [compRow.cp, compRow.poblacion].filter(Boolean).join(" "),
+          compRow.provincia,
+          compRow.pais,
+        ].filter((part) => typeof part === "string" && part.trim()).join(", ")
+      : "";
 
     const tpl = offerTemplate({
       buyer: {
-        nombre: buyerNombre,
+        nombre: buyerNombre || (vendedorId ? "Agente" : "Comprador"),
         email: buyerEmail,
         telefono: (compRow?.tel as string | undefined) || undefined,
+        documento: (compRow?.documento as string | undefined) || undefined,
+        direccion: domicilio || undefined,
+        tipoPersona: compRow?.tipo_persona === "juridica" ? "Persona jurídica" : compRow ? "Persona física" : undefined,
+        razonSocial: (compRow?.razon_social as string | undefined) || undefined,
       },
       asset: {
         id: (assetRow?.id as string | undefined) ?? assetId,
@@ -144,9 +196,23 @@ export async function createOferta(params: {
   assetId: string;
   propuestaEuros: number;
   comentarios?: string;
+  datos?: DatosFirma;
 }): Promise<OfertaRow> {
   const session = await getServerSession();
+  if (!session?.email) throw new Error("Acceso denegado: se requiere autenticación");
   const comentarios = params.comentarios?.trim() || null;
+  const service = await createServiceClient();
+  const { data: dueno, error: duenoErr } = await service
+    .from("compradores")
+    .select("email")
+    .eq("id", params.compradorId)
+    .maybeSingle();
+  if (duenoErr) throw new Error(duenoErr.message);
+  if (!dueno) throw new Error("Comprador no encontrado");
+  if ((dueno.email as string).trim().toLowerCase() !== session.email.trim().toLowerCase()) {
+    throw new Error("Acceso denegado: no puedes presentar esta oferta");
+  }
+  await exigirDatosFirma(service, params.compradorId, params.datos);
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("ofertas")
@@ -184,6 +250,7 @@ export async function createOfertaAdmin(params: {
   assetId: string;
   propuestaEuros: number;
   comentarios?: string;
+  datos?: DatosFirma;
 }): Promise<OfertaRow> {
   const session = await requireAdminOrVendor();
 
@@ -247,6 +314,10 @@ export async function createOfertaAdmin(params: {
       .maybeSingle();
     if (compErr) throw new Error(compErr.message);
     if (!compRow) throw new Error("Comprador no encontrado");
+  }
+
+  if (compradorId) {
+    await exigirDatosFirma(supabase, compradorId, params.datos);
   }
 
   const comentarios = params.comentarios?.trim() || null;

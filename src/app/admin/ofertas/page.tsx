@@ -11,6 +11,7 @@ import Link from "next/link";
 import { FileText, CheckCircle2, XCircle, Send, Loader2, AlertCircle, Euro, X } from "lucide-react";
 import { fmt } from "@/lib/utils";
 import { CommentByline } from "@/components/CommentByline";
+import { nombreVisible } from "@/lib/comprador-oferta";
 import { toast } from "@/lib/toast";
 
 const ESTADO_FILTRO: Array<OfertaRow["estado"] | ""> = [
@@ -206,9 +207,9 @@ function OfertasPageInner() {
               if (!asset) return null;
               if (!comprador && !agente && !oferta.vendedor_id) return null;
 
-              const actorNombre = comprador?.nombre
-                ?? agente?.nombre
-                ?? (oferta.vendedor_id ? "Agente" : "—");
+              const actorNombre = (comprador ? nombreVisible(comprador) : "")
+                || agente?.nombre
+                || (oferta.vendedor_id ? "Agente" : "—");
               const actorEmail = comprador?.email ?? agente?.email ?? "";
               const actorIni = comprador?.ini ?? agente?.ini ?? "AG";
               const actorCol = comprador?.col ?? agente?.col ?? "#1e3a5f,#3d6b9f";

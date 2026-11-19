@@ -35,7 +35,9 @@ Todas em `src/app/actions/`. Padrão: `"use server"`, auth via `auth-server.ts`,
 |--------|-----------|
 | `fetchCompradores` / `fetchCompradorById` | Leitura com service role. Admin: todos. Agente: só os seus. Ao listar, aplica a reatribuição dos 90 dias. Cliente: lista vazia |
 | `fetchCompradorByEmail` | Lookup por email |
-| `ensureCompradorForEmail` | Liga auth user ao CRM |
+| `ensureCompradorForEmail` | Liga auth user ao CRM. Se o nome chega inteiro, parte-o em nome e apelidos |
+| `createComprador` / `updateCompradorFields` | Alta e ficha. Admin e o agente atribuído. A ficha inclui os dados de firma |
+| `updateMisDatosComprador` | O próprio comprador grava a ficha de firma. O email fica o da conta |
 | `upsertComprador` | Criar/actualizar |
 
 ## Vendedores (agentes)
@@ -78,7 +80,8 @@ Todas em `src/app/actions/`. Padrão: `"use server"`, auth via `auth-server.ts`,
 
 | Função | Descrição |
 |--------|-----------|
-| `createOferta` | Comprador submete proposta |
+| `createOferta` | Comprador submete proposta. Exige a ficha de firma completa e grava na ficha o que completar no formulário |
+| `createOfertaAdmin` | Admin ou agente. Com comprador, a mesma validação de firma. Sem comprador, a oferta fica em nome do agente |
 | `fetchOfertasByAsset` / `fetchOfertasByComprador` | Listagens |
 | `fetchOfertasPendientes` | Admin — pendentes |
 | `updateOfertaEstado` | Validar/rejeitar |

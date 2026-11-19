@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { upsertComprador, ensureCompradorForEmail } from "@/app/actions/compradores";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { isDevAuthEnabled, resolveRole, isDemoEmail } from "@/lib/auth-role";
+import { inicialesComprador, nombreCompleto } from "@/lib/comprador-oferta";
 
 const cookieBase = {
   path: "/" as const,
@@ -259,6 +260,7 @@ export async function signUp(formData: FormData): Promise<{ error?: string }> {
   const emailRaw = formData.get("email");
   const passwordRaw = formData.get("password");
   const nombre = ((formData.get("nombre") as string) || "").trim();
+  const apellidos = ((formData.get("apellidos") as string) || "").trim();
   const tel = (formData.get("tel") as string) || "";
   const redirectTo = (formData.get("redirect") as string) || "";
 
@@ -268,6 +270,8 @@ export async function signUp(formData: FormData): Promise<{ error?: string }> {
   if (!email) return { error: "Introduce un email válido." };
   if (password.length < 6) return { error: "La contraseña debe tener al menos 6 caracteres." };
   if (!nombre) return { error: "Introduce tu nombre." };
+  if (!apellidos) return { error: "Introduce tus apellidos." };
+  const nombreVisible = nombreCompleto(nombre, apellidos);
   if (isDevAuthEnabled() && DEV_USERS[email]) {
     return { error: "Este email está reservado para una cuenta demo." };
   }
@@ -275,13 +279,7 @@ export async function signUp(formData: FormData): Promise<{ error?: string }> {
     return { error: "No se puede registrar con un email @propcrm.com" };
   }
 
-  const initials = nombre
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+  const initials = inicialesComprador(nombre, apellidos);
 
   let authUserId: string | null = null;
   let hasSupabaseSession = false;
@@ -297,7 +295,7 @@ export async function signUp(formData: FormData): Promise<{ error?: string }> {
       email,
       password,
       email_confirm: true,
-      user_metadata: { role: "cliente", nombre, tel },
+      user_metadata: { role: "cliente", nombre: nombreVisible, tel },
     });
 
     if (createErr) {
@@ -319,7 +317,7 @@ export async function signUp(formData: FormData): Promise<{ error?: string }> {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { role: "cliente", nombre, tel } },
+        options: { data: { role: "cliente", nombre: nombreVisible, tel } },
       });
       if (error) {
         supabaseError = error.message;
@@ -373,6 +371,15 @@ export async function signUp(formData: FormData): Promise<{ error?: string }> {
     await upsertComprador({
       id: compradorId,
       nombre,
+      apellidos,
+      tipoPersona: "fisica",
+      razonSocial: "",
+      documento: "",
+      direccion: "",
+      cp: "",
+      poblacion: "",
+      provincia: "",
+      pais: "España",
       ini: initials || "??",
       col: "",
       tipo: "Privado",
@@ -403,7 +410,7 @@ export async function signUp(formData: FormData): Promise<{ error?: string }> {
     const cookieStore = await cookies();
     cookieStore.set(
       "dev-auth",
-      JSON.stringify({ email, role: "cliente", nombre, compradorId }),
+      JSON.stringify({ email, role: "cliente", nombre: nombreVisible, compradorId }),
       cookieBase,
     );
   } else {

@@ -110,6 +110,7 @@ describe("permisos de compradores: agente, otro agente y admin", () => {
     expect(plan).toEqual({
       ok: true,
       nombre: "Nuevo Lead",
+      apellidos: "",
       email: "lead@example.com",
       acceso: "sin_acceso",
       assignVendedorId: "agente-1",

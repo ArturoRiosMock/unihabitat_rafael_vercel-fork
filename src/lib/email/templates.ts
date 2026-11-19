@@ -227,7 +227,15 @@ export interface OfferAssetSummary {
 }
 
 export interface OfferInput {
-  buyer: { nombre: string; email: string; telefono?: string };
+  buyer: {
+    nombre: string;
+    email: string;
+    telefono?: string;
+    documento?: string;
+    direccion?: string;
+    tipoPersona?: string;
+    razonSocial?: string;
+  };
   asset: OfferAssetSummary;
   propuestaEuros: number;
   comentarios?: string;
@@ -253,6 +261,10 @@ export function offerTemplate(input: OfferInput): EmailTemplate {
     <h3 style="font-size:13px;color:${NAVY};text-transform:uppercase;letter-spacing:1px;margin:22px 0 8px 0;">Comprador</h3>
     ${infoTable(
       row("Nombre", input.buyer.nombre) +
+      row("Tipo", input.buyer.tipoPersona) +
+      row("Razón social", input.buyer.razonSocial) +
+      row("DNI/NIE/CIF", input.buyer.documento) +
+      row("Domicilio", input.buyer.direccion) +
       row("Email", input.buyer.email) +
       row("Teléfono", input.buyer.telefono)
     )}
@@ -276,6 +288,10 @@ export function offerTemplate(input: OfferInput): EmailTemplate {
     input.asset.precio != null ? `Precio publicado: ${fmtEur(input.asset.precio)}` : null,
     "",
     `Comprador: ${input.buyer.nombre}`,
+    input.buyer.tipoPersona ? `Tipo: ${input.buyer.tipoPersona}` : null,
+    input.buyer.razonSocial ? `Razón social: ${input.buyer.razonSocial}` : null,
+    input.buyer.documento ? `DNI/NIE/CIF: ${input.buyer.documento}` : null,
+    input.buyer.direccion ? `Domicilio: ${input.buyer.direccion}` : null,
     `Email: ${input.buyer.email}`,
     input.buyer.telefono ? `Teléfono: ${input.buyer.telefono}` : null,
     input.comentarios ? `\nComentarios:\n${input.comentarios}` : null,

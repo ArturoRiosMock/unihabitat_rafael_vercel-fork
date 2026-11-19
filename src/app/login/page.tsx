@@ -188,15 +188,29 @@ function LoginForm() {
 
           {mode === "register" && (
             <>
-              <div className="mb-4">
-                <label className="mb-1.5 block text-xs font-medium text-white/60">Nombre completo</label>
-                <input
-                  name="nombre"
-                  type="text"
-                  required
-                  className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3.5 py-2.5 text-sm text-white placeholder:text-white/30 focus:border-gold/50 focus:outline-none focus:ring-1 focus:ring-gold/30"
-                  placeholder="Tu nombre"
-                />
+              <div className="mb-4 grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-white/60">Nombre</label>
+                  <input
+                    name="nombre"
+                    type="text"
+                    required
+                    autoComplete="given-name"
+                    className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3.5 py-2.5 text-sm text-white placeholder:text-white/30 focus:border-gold/50 focus:outline-none focus:ring-1 focus:ring-gold/30"
+                    placeholder="Nombre"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-white/60">Apellidos</label>
+                  <input
+                    name="apellidos"
+                    type="text"
+                    required
+                    autoComplete="family-name"
+                    className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3.5 py-2.5 text-sm text-white placeholder:text-white/30 focus:border-gold/50 focus:outline-none focus:ring-1 focus:ring-gold/30"
+                    placeholder="Apellidos"
+                  />
+                </div>
               </div>
               <PhoneInput name="tel" />
             </>

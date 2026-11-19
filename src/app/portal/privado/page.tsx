@@ -13,7 +13,7 @@ import { assetPrivateHref } from "@/lib/public-slug";
 import { shouldBackfillMapFromAddress } from "@/lib/map-default";
 import { useFavoritos } from "@/hooks/useFavoritos";
 import Link from "next/link";
-import { Building, MapPin, LogIn, LogOut, FileText, Star } from "lucide-react";
+import { Building, MapPin, LogIn, LogOut, FileText, Star, User } from "lucide-react";
 import { InteractiveMap } from "@/components/InteractiveMap";
 
 export default function PortalPrivadoPage() {
@@ -245,7 +245,7 @@ export default function PortalPrivadoPage() {
         </div>
       </div>
 
-      <div className="mb-6 grid grid-cols-3 gap-4">
+      <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <div className="rounded-lg border border-border bg-white p-5 shadow-sm">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gold/10 text-gold"><Building size={20} /></div>
@@ -266,6 +266,15 @@ export default function PortalPrivadoPage() {
             </div>
           </div>
         )}
+        <Link href="/portal/privado/datos" className="rounded-lg border border-border bg-white p-5 shadow-sm transition-all hover:shadow-md">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gold/10 text-gold"><User size={20} /></div>
+            <div>
+              <div className="text-sm font-semibold text-navy">Mis datos</div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">Para firmar ofertas</div>
+            </div>
+          </div>
+        </Link>
         <Link href="/portal/privado/ofertas" className="rounded-lg border border-border bg-white p-5 shadow-sm transition-all hover:shadow-md">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-navy/10 text-navy"><FileText size={20} /></div>

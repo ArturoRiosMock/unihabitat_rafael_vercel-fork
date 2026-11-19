@@ -15,6 +15,7 @@ import {
   Mail,
 } from "lucide-react";
 import { useApp } from "@/lib/context";
+import { nombreVisible } from "@/lib/comprador-oferta";
 import {
   fetchVendorPermissions,
   upsertVendorPermissions,
@@ -260,7 +261,7 @@ export default function AgenteDetailPage({
     if (!qC) return compradores;
     const lower = qC.toLowerCase();
     return compradores.filter((c) =>
-      [c.nombre, c.email, c.tel, c.intereses].join(" ").toLowerCase().includes(lower),
+      [nombreVisible(c), c.apellidos, c.documento, c.email, c.tel, c.intereses].join(" ").toLowerCase().includes(lower),
     );
   }, [compradores, qC]);
   const filteredAssets = useMemo(() => {
@@ -493,7 +494,7 @@ export default function AgenteDetailPage({
                         className="accent-gold"
                       />
                       <div className="flex-1 overflow-hidden">
-                        <div className="truncate text-xs font-medium text-text">{c.nombre}</div>
+                        <div className="truncate text-xs font-medium text-text">{nombreVisible(c)}</div>
                         <div className="truncate text-[10px] text-muted">{c.email}</div>
                       </div>
                       {busy && <Loader2 size={12} className="animate-spin text-gold" />}

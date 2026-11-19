@@ -7,6 +7,7 @@ import { Search, X, Plus, ChevronRight, Loader2, AlertCircle } from "lucide-reac
 import { createComprador } from "@/app/actions/compradores";
 import { GestionPlazo } from "@/components/GestionPlazo";
 import { plazoGestion } from "@/lib/comprador-gestion";
+import { datosFirmaFromComprador, etiquetaDatosFirma, nombreVisible } from "@/lib/comprador-oferta";
 import { toast } from "@/lib/toast";
 
 const pillClass: Record<string, string> = {
@@ -82,7 +83,18 @@ export default function CompradoresPage() {
         if (!plazo.warning) return false;
       }
       if (q) {
-        const blob = [p.nombre, p.email, p.tel, p.agente, p.estado, p.intereses]
+        const blob = [
+          nombreVisible(p),
+          p.apellidos,
+          p.documento,
+          p.razonSocial,
+          p.poblacion,
+          p.email,
+          p.tel,
+          p.agente,
+          p.estado,
+          p.intereses,
+        ]
           .join(" ")
           .toLowerCase();
         if (!blob.includes(q.toLowerCase())) return false;
@@ -165,7 +177,7 @@ export default function CompradoresPage() {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
           <input
             className="w-full rounded-lg border border-border bg-white py-2.5 pl-9 pr-4 text-sm text-text shadow-sm outline-none placeholder:text-muted/70 focus:border-navy focus:ring-2 focus:ring-navy/5"
-            placeholder="Buscar por nombre, email, teléfono, agente..."
+            placeholder="Buscar por nombre, apellidos, documento, email, teléfono..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -230,7 +242,10 @@ export default function CompradoresPage() {
               No se encontraron compradores con los filtros actuales.
             </div>
           ) : (
-            filtered.map((p) => (
+            filtered.map((p) => {
+              const datosEtiqueta = etiquetaDatosFirma(datosFirmaFromComprador(p));
+              const datosOk = datosEtiqueta === "Datos completos";
+              return (
               <Link
                 key={p.id}
                 href={`/admin/compradores/${p.id}`}
@@ -244,8 +259,14 @@ export default function CompradoresPage() {
                     {p.ini}
                   </div>
                   <div className="overflow-hidden">
-                    <div className="truncate text-sm font-medium">{p.nombre}</div>
+                    <div className="truncate text-sm font-medium">{nombreVisible(p)}</div>
                     <div className="truncate text-[11px] text-muted">{p.email}</div>
+                    <div
+                      className={`truncate text-[10px] font-medium ${datosOk ? "text-green" : "text-orange"}`}
+                      title={datosEtiqueta}
+                    >
+                      {datosEtiqueta}
+                    </div>
                   </div>
                 </div>
                 <span
@@ -273,7 +294,8 @@ export default function CompradoresPage() {
                 </span>
                 <ChevronRight size={14} className="text-border" />
               </Link>
-            ))
+              );
+            })
           )}
         </div>
       </div>
@@ -302,6 +324,7 @@ function NuevoCompradorModal({
   onCreated: () => Promise<void>;
 }) {
   const [nombre, setNombre] = useState("");
+  const [apellidos, setApellidos] = useState("");
   const [email, setEmail] = useState("");
   const [tel, setTel] = useState("");
   const [tipo, setTipo] = useState<"Privado" | "Free">("Privado");
@@ -314,6 +337,7 @@ function NuevoCompradorModal({
     try {
       await createComprador({
         nombre,
+        apellidos,
         email,
         tel,
         tipo,
@@ -351,6 +375,7 @@ function NuevoCompradorModal({
         </p>
         <div className="flex flex-col gap-3">
           <Field label="Nombre *" value={nombre} onChange={setNombre} required />
+          <Field label="Apellidos" value={apellidos} onChange={setApellidos} />
           <Field label="Email *" value={email} onChange={setEmail} type="email" required />
           <Field label="Teléfono" value={tel} onChange={setTel} />
           <div className={isAgente ? "" : "grid grid-cols-2 gap-3"}>

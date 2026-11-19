@@ -33,6 +33,8 @@ import {
   getOwnerMail, getDeudaTotal, fmt, parseLocaleMoneyInput,
 } from "@/lib/utils";
 import { toast } from "@/lib/toast";
+import { datosFirmaCompletos, datosFirmaFromComprador, datosFirmaVacios, nombreVisible, type DatosFirma } from "@/lib/comprador-oferta";
+import { OfertaDatosComprador } from "@/components/OfertaDatosComprador";
 
 const tabs = [
   { icon: Home,       label: "Características", adminOnly: false, contentIndex: 0 },
@@ -344,6 +346,8 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset, canDelet
   const [ofertaCompradorId, setOfertaCompradorId] = useState("");
   const [ofertaImporte, setOfertaImporte] = useState("");
   const [ofertaComentarios, setOfertaComentarios] = useState("");
+  const [datosOferta, setDatosOferta] = useState<DatosFirma>(datosFirmaVacios());
+  const datosCargadosPara = useRef("");
   const [ofertaStatus, setOfertaStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
   const [ofertaError, setOfertaError] = useState("");
   const [siblingAssets, setSiblingAssets] = useState<Asset[]>([]);
@@ -430,12 +434,26 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset, canDelet
 
   const handleOpenOferta = () => {
     setOfertaCompradorId("");
+    setDatosOferta(datosFirmaVacios());
+    datosCargadosPara.current = "";
     setOfertaImporte("");
     setOfertaComentarios("");
     setOfertaStatus("idle");
     setOfertaError("");
     setShowOfertaModal(true);
   };
+
+  useEffect(() => {
+    if (!ofertaCompradorId) {
+      datosCargadosPara.current = "";
+      return;
+    }
+    if (datosCargadosPara.current === ofertaCompradorId) return;
+    const comprador = compradores.find((item) => item.id === ofertaCompradorId);
+    if (!comprador) return;
+    datosCargadosPara.current = ofertaCompradorId;
+    setDatosOferta(datosFirmaFromComprador(comprador));
+  }, [ofertaCompradorId, compradores]);
 
   const handleSendOferta = async () => {
     if (!isAgente && !ofertaCompradorId) {
@@ -449,11 +467,16 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset, canDelet
       setOfertaError("Indica un importe válido mayor que 0");
       return;
     }
+    if (ofertaCompradorId && !datosFirmaCompletos(datosOferta)) {
+      setOfertaStatus("error");
+      setOfertaError("Completa los datos del comprador antes de registrar la oferta");
+      return;
+    }
     setOfertaStatus("sending");
     setOfertaError("");
     try {
       await createOfertaAdmin({
-        ...(ofertaCompradorId ? { compradorId: ofertaCompradorId } : {}),
+        ...(ofertaCompradorId ? { compradorId: ofertaCompradorId, datos: datosOferta } : {}),
         assetId,
         propuestaEuros: importe,
         comentarios: ofertaComentarios.trim() || undefined,
@@ -642,7 +665,7 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset, canDelet
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
           onClick={() => ofertaStatus !== "sending" && setShowOfertaModal(false)}
         >
-          <div className="w-full max-w-md rounded-xl border border-border bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-border px-5 py-4">
               <h3 className="text-base font-semibold text-navy">Registrar oferta</h3>
               <button
@@ -695,10 +718,17 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset, canDelet
                     <option value="">{isAgente ? "Sin comprador concreto" : "Seleccionar comprador…"}</option>
                     {compradores.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.nombre}{c.email ? ` · ${c.email}` : ""}
+                        {nombreVisible(c)}{c.email ? ` · ${c.email}` : ""}
                       </option>
                     ))}
                   </select>
+                  {ofertaCompradorId ? (
+                    <OfertaDatosComprador
+                      key={ofertaCompradorId}
+                      datos={datosOferta}
+                      onChange={setDatosOferta}
+                    />
+                  ) : null}
                   <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-muted">Importe (€)</label>
                   <input
                     type="text"
@@ -741,6 +771,7 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset, canDelet
                         ofertaStatus === "sending"
                         || !ofertaImporte.trim()
                         || (!isAgente && !ofertaCompradorId)
+                        || (Boolean(ofertaCompradorId) && !datosFirmaCompletos(datosOferta))
                       }
                       className="flex items-center gap-1.5 rounded-md bg-gold px-3 py-1.5 text-xs font-medium text-white hover:bg-gold2 disabled:opacity-50"
                     >
@@ -1239,7 +1270,7 @@ function TabClientes({ assetId }: { assetId: string }) {
     if (result.success) {
       setInvitedIds(prev => new Set([...prev, compradorId]));
       const cl = compradores.find(c => c.id === compradorId);
-      toast.success("Activo compartido", { description: `Compartido con ${cl?.nombre ?? "el cliente"}.` });
+      toast.success("Activo compartido", { description: `Compartido con ${cl ? nombreVisible(cl) : "el cliente"}.` });
       setShowInviteModal(false);
     } else {
       toast.error("No se pudo compartir el activo", { description: result.error ?? "error desconocido" });
@@ -1253,7 +1284,7 @@ function TabClientes({ assetId }: { assetId: string }) {
     if (result.success) {
       setInvitedIds(prev => { const n = new Set(prev); n.delete(compradorId); return n; });
       const cl = compradores.find(c => c.id === compradorId);
-      toast.success("Acceso revocado", { description: `Para ${cl?.nombre ?? "el cliente"}.` });
+      toast.success("Acceso revocado", { description: `Para ${cl ? nombreVisible(cl) : "el cliente"}.` });
     } else {
       toast.error("No se pudo revocar el acceso", { description: result.error ?? "error desconocido" });
     }
@@ -1300,7 +1331,7 @@ function TabClientes({ assetId }: { assetId: string }) {
         </div>
       ) : (
         invitedComps.map((cl) => {
-          const ini = getInitials(cl.nombre);
+          const ini = cl.ini || getInitials(nombreVisible(cl));
           const col = getColorGradient(ini);
           return (
             <div key={cl.id} className="mb-3 rounded-lg border border-border bg-white p-4">
@@ -1309,7 +1340,7 @@ function TabClientes({ assetId }: { assetId: string }) {
                   {ini}
                 </div>
                 <div className="flex-1">
-                  <div className="text-sm font-semibold text-navy">{cl.nombre}</div>
+                  <div className="text-sm font-semibold text-navy">{nombreVisible(cl)}</div>
                   <div className="text-[11px] text-muted">{cl.tipo} · {cl.email} · NDA {cl.nda.toLowerCase()}</div>
                 </div>
                 <button
@@ -1342,7 +1373,7 @@ function TabClientes({ assetId }: { assetId: string }) {
                 <p className="py-4 text-center text-sm text-muted">Todos los clientes ya tienen acceso a este activo</p>
               ) : (
                 notInvitedComps.map(cl => {
-                  const ini = getInitials(cl.nombre);
+                  const ini = cl.ini || getInitials(nombreVisible(cl));
                   const col = getColorGradient(ini);
                   return (
                     <div key={cl.id} className="mb-2 flex items-center gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-cream/50">
@@ -1350,7 +1381,7 @@ function TabClientes({ assetId }: { assetId: string }) {
                         {ini}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="truncate text-sm font-medium text-navy">{cl.nombre}</div>
+                        <div className="truncate text-sm font-medium text-navy">{nombreVisible(cl)}</div>
                         <div className="truncate text-[11px] text-muted">{cl.email}</div>
                       </div>
                       <button

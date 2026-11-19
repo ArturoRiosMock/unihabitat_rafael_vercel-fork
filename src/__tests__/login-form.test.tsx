@@ -145,7 +145,8 @@ describe("LoginPage registration form", () => {
     await user.click(screen.getByText("Registrarse"));
 
     // Fill form
-    await user.type(screen.getByPlaceholderText("Tu nombre"), "Juan Pérez");
+    await user.type(screen.getByPlaceholderText("Nombre"), "Juan");
+    await user.type(screen.getByPlaceholderText("Apellidos"), "Pérez");
     await user.type(screen.getByPlaceholderText(/000 00 00 00/), "612345678");
     await user.type(screen.getByPlaceholderText("tu@email.com"), "juan@test.com");
     await user.type(screen.getByPlaceholderText("Mínimo 6 caracteres"), "secret123");
@@ -159,7 +160,8 @@ describe("LoginPage registration form", () => {
     // Verify FormData contains tel
     const fd = mockSignUp.mock.calls[0][0] as FormData;
     expect(fd.get("tel")).toBe("+34 612 34 56 78");
-    expect(fd.get("nombre")).toBe("Juan Pérez");
+    expect(fd.get("nombre")).toBe("Juan");
+    expect(fd.get("apellidos")).toBe("Pérez");
     expect(fd.get("email")).toBe("juan@test.com");
   });
 
@@ -168,7 +170,8 @@ describe("LoginPage registration form", () => {
     render(<LoginPage />);
     await user.click(screen.getByText("Registrarse"));
 
-    await user.type(screen.getByPlaceholderText("Tu nombre"), "Ana");
+    await user.type(screen.getByPlaceholderText("Nombre"), "Ana");
+    await user.type(screen.getByPlaceholderText("Apellidos"), "García");
     await user.type(screen.getByPlaceholderText("tu@email.com"), "ana@test.com");
     await user.type(screen.getByPlaceholderText("Mínimo 6 caracteres"), "secret123");
     await user.type(screen.getByPlaceholderText("Repite la contraseña"), "secret123");

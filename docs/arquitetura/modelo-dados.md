@@ -63,7 +63,7 @@ Campos que antes viviam em `asset.adm.*` devem ser lidos de `asset.propiedades[]
 
 | Entidade | Tabela Supabase | Notas |
 |----------|-----------------|-------|
-| Comprador | `compradores` | Ligado a `auth.users`; interesses, presupuesto, NDA. `ultima_gestion_agente_at` é a última gestão do agente atribuído (90 dias; ver auth). `reasignado_inactividad_at` regista a passagem ao gestor |
+| Comprador | `compradores` | Ligado a `auth.users`; interesses, presupuesto, NDA. `nombre` é o nome próprio e `apellidos` os apelidos (a migração parte o nome antigo pelo primeiro espaço). `nombre_completo` é gerado. Para a oferta ficar pronta a assinar: DNI/NIE/CIF (`documento`), tipo de pessoa, razão social se for jurídica, morada, CP, população, província, país, telefone e email. `ultima_gestion_agente_at` é a última gestão do agente atribuído (90 dias; ver auth). `reasignado_inactividad_at` regista a passagem ao gestor |
 | Vendedor | `vendedores` | Agente; convite via Supabase Auth |
 | Tarea | `tareas` | Tarefas internas |
 | Oportunidade | `oportunidades` | Match com score |

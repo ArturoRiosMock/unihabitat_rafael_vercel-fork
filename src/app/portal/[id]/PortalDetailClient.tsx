@@ -12,6 +12,14 @@ import {
 } from "lucide-react";
 import { createOferta } from "@/app/actions/ofertas";
 import { fetchCompradorByEmail, ensureCompradorForEmail } from "@/app/actions/compradores";
+import {
+  datosFirmaCompletos,
+  datosFirmaFromComprador,
+  splitNombreCompleto,
+  validarDatosFirma,
+  type DatosFirma,
+} from "@/lib/comprador-oferta";
+import { OfertaDatosComprador } from "@/components/OfertaDatosComprador";
 import { enviarSolicitudInformacion } from "@/app/actions/email-info-request";
 import { usePortalAuth } from "@/hooks/usePortalAuth";
 import { InteractiveMap } from "@/components/InteractiveMap";
@@ -519,6 +527,7 @@ function OfertaModal({
   onClose: () => void;
 }) {
   const [compradorId, setCompradorId] = useState<string | null>(null);
+  const [datos, setDatos] = useState<DatosFirma | null>(null);
   const [resolvingComprador, setResolvingComprador] = useState(true);
   const [propuesta, setPropuesta] = useState("");
   const [comentarios, setComentarios] = useState("");
@@ -536,9 +545,20 @@ function OfertaModal({
         let row = await fetchCompradorByEmail(currentUser.email);
         let id = row?.id ?? null;
         if (!id) {
-          id = await ensureCompradorForEmail(currentUser.email, currentUser.nombre);
+          const partes = splitNombreCompleto(currentUser.nombre);
+          id = await ensureCompradorForEmail(currentUser.email, partes.nombre, partes.apellidos);
+          row = await fetchCompradorByEmail(currentUser.email);
         }
-        if (!cancelled) setCompradorId(id);
+        if (!cancelled) {
+          setCompradorId(id);
+          const base = row
+            ? datosFirmaFromComprador(row)
+            : datosFirmaFromComprador({
+                ...splitNombreCompleto(currentUser.nombre),
+                email: currentUser.email,
+              });
+          setDatos(base);
+        }
       } catch (err) {
         if (!cancelled) {
           setCompradorId(null);
@@ -562,10 +582,25 @@ function OfertaModal({
       setError("Ingresa una propuesta válida en euros");
       return;
     }
+    if (!datos) {
+      setError("No se pudieron cargar tus datos");
+      return;
+    }
+    const firma = validarDatosFirma(datos);
+    if (!firma.ok) {
+      setError(firma.error);
+      return;
+    }
     setSubmitting(true);
     setError("");
     try {
-      await createOferta({ compradorId, assetId, propuestaEuros: euros, comentarios: comentarios.trim() || undefined });
+      await createOferta({
+        compradorId,
+        assetId,
+        propuestaEuros: euros,
+        comentarios: comentarios.trim() || undefined,
+        datos: firma.datos,
+      });
       setSuccess(true);
       setTimeout(() => { onClose(); setSuccess(false); }, 2000);
     } catch (err) {
@@ -577,7 +612,7 @@ function OfertaModal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-xl border border-border bg-white shadow-xl" onClick={e => e.stopPropagation()}>
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-white shadow-xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <h2 className="text-lg font-semibold text-navy">Presentar oferta</h2>
           <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-muted transition-colors hover:bg-cream hover:text-navy">
@@ -586,11 +621,15 @@ function OfertaModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-5">
-          <div className="mb-4 rounded-lg border border-border bg-navy/5 p-3">
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">Tus datos</div>
-            <div className="mt-1 text-sm font-medium text-navy">{currentUser.nombre}</div>
-            <div className="text-xs text-muted">{currentUser.email}</div>
-          </div>
+          {datos ? (
+            <OfertaDatosComprador datos={datos} onChange={setDatos} emailReadOnly />
+          ) : (
+            <div className="mb-4 rounded-lg border border-border bg-navy/5 p-3">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">Tus datos</div>
+              <div className="mt-1 text-sm font-medium text-navy">{currentUser.nombre}</div>
+              <div className="text-xs text-muted">{currentUser.email}</div>
+            </div>
+          )}
 
           {resolvingComprador && (
             <div className="mb-4 flex items-center gap-2 rounded-lg border border-border bg-cream2 px-3 py-2.5 text-xs text-muted">
@@ -658,7 +697,7 @@ function OfertaModal({
             <button type="button" onClick={onClose} className="flex-1 rounded-lg border border-border px-4 py-2.5 text-xs font-medium text-navy hover:bg-cream">Cancelar</button>
             <button
               type="submit"
-              disabled={submitting || resolvingComprador || !compradorId || !propuesta.trim()}
+              disabled={submitting || resolvingComprador || !compradorId || !propuesta.trim() || !datos || !datosFirmaCompletos(datos)}
               className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-gold px-4 py-2.5 text-xs font-medium text-white hover:bg-gold2 disabled:opacity-50"
             >
               {submitting ? <><Loader2 size={14} className="animate-spin" /> Enviando...</> : "Enviar oferta"}

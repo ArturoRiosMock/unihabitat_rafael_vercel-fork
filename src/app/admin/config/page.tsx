@@ -16,6 +16,7 @@ import {
   unassignCompradorFromVendor,
 } from "@/app/actions/permissions";
 import { GeoapifyDiagnostics } from "@/components/GeoapifyDiagnostics";
+import { nombreVisible } from "@/lib/comprador-oferta";
 
 interface ToggleItem { label: string; desc: string; enabled: boolean; }
 
@@ -259,7 +260,7 @@ export default function ConfigPage() {
                           className="accent-gold"
                         />
                         <span className="flex-1 truncate text-xs text-text">
-                          <span className="font-medium">{c.nombre}</span> · {c.email}
+                          <span className="font-medium">{nombreVisible(c)}</span> · {c.email}
                         </span>
                       </label>
                     ))}

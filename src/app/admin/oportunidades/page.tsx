@@ -5,6 +5,7 @@ import { useApp } from "@/lib/context";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { Zap, RefreshCw } from "lucide-react";
+import { nombreVisible } from "@/lib/comprador-oferta";
 
 interface OpRow { id: string; comprador_id: string; asset_id: string; score: number; estado: string; created_at: string }
 
@@ -73,7 +74,7 @@ export default function OportunidadesPage() {
                   <Link href={`/admin/compradores/${c.id}`} className="flex items-center gap-2 hover:underline">
                     <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white" style={{ background: `linear-gradient(135deg,${c.col})` }}>{c.ini}</div>
                     <div className="overflow-hidden">
-                      <div className="truncate text-sm font-medium text-navy">{c.nombre}</div>
+                      <div className="truncate text-sm font-medium text-navy">{nombreVisible(c)}</div>
                       <div className="truncate text-[11px] text-muted">{c.intereses}</div>
                     </div>
                   </Link>

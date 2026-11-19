@@ -39,6 +39,8 @@ import { GestionPlazo } from "@/components/GestionPlazo";
 import type { CompradorComentario } from "@/lib/comprador-comentarios";
 import { fmt } from "@/lib/utils";
 import { toast } from "@/lib/toast";
+import { datosFirmaFromComprador, nombreVisible, type DatosFirma } from "@/lib/comprador-oferta";
+import { DatosFirmaFields, DatosOfertaEstado } from "@/components/DatosFirmaFields";
 
 const tabs = [
   { icon: User, label: "Datos" },
@@ -64,7 +66,7 @@ export default function CompradorDetailPage({ params }: { params: Promise<{ id: 
   );
 
   async function handleDelete() {
-    if (!confirm(`¿Eliminar comprador ${c!.nombre}? Esta acción no se puede deshacer.`)) return;
+    if (!confirm(`¿Eliminar comprador ${nombreVisible(c!)}? Esta acción no se puede deshacer.`)) return;
     setDeleting(true);
     try {
       await deleteComprador(c!.id);
@@ -84,7 +86,8 @@ export default function CompradorDetailPage({ params }: { params: Promise<{ id: 
     <>
       <div className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-border bg-white px-6">
         <div className="flex items-center gap-3">
-          <h1 className="text-lg font-semibold text-navy">{c.nombre}</h1>
+          <h1 className="text-lg font-semibold text-navy">{nombreVisible(c)}</h1>
+          <DatosOfertaEstado datos={datosFirmaFromComprador(c)} />
           <span
             className={`rounded-md px-2.5 py-0.5 text-xs font-medium ${
               c.acceso === "activo" ? "bg-green/10 text-green" : "bg-red/10 text-red"
@@ -153,9 +156,7 @@ const FICHA_ESTADOS = ["Nuevo", "Seguimiento", "Negociación", "Contactado", "Of
 
 function FichaCompradorCard({ c }: { c: Comprador }) {
   const { refreshCompradores } = useApp();
-  const [nombre, setNombre] = useState(c.nombre);
-  const [email, setEmail] = useState(c.email);
-  const [tel, setTel] = useState(c.tel);
+  const [firma, setFirma] = useState<DatosFirma>(() => datosFirmaFromComprador(c));
   const [tipo, setTipo] = useState<"Privado" | "Free">(c.tipo);
   const [estado, setEstado] = useState(c.estado);
   const [intereses, setIntereses] = useState(c.intereses);
@@ -164,9 +165,7 @@ function FichaCompradorCard({ c }: { c: Comprador }) {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setNombre(c.nombre);
-    setEmail(c.email);
-    setTel(c.tel);
+    setFirma(datosFirmaFromComprador(c));
     setTipo(c.tipo);
     setEstado(c.estado);
     setIntereses(c.intereses);
@@ -178,9 +177,18 @@ function FichaCompradorCard({ c }: { c: Comprador }) {
     setSaving(true);
     try {
       await updateCompradorFields(c.id, {
-        nombre,
-        email,
-        tel,
+        nombre: firma.nombre,
+        apellidos: firma.apellidos,
+        email: firma.email,
+        tel: firma.tel,
+        tipoPersona: firma.tipoPersona,
+        razonSocial: firma.razonSocial,
+        documento: firma.documento,
+        direccion: firma.direccion,
+        cp: firma.cp,
+        poblacion: firma.poblacion,
+        provincia: firma.provincia,
+        pais: firma.pais,
         tipo,
         estado,
         intereses,
@@ -200,10 +208,11 @@ function FichaCompradorCard({ c }: { c: Comprador }) {
 
   return (
     <SectionCard title="Ficha">
-      <div className="grid grid-cols-2 gap-3">
-        <FichaField label="Nombre" value={nombre} onChange={setNombre} />
-        <FichaField label="Email" value={email} onChange={setEmail} type="email" />
-        <FichaField label="Teléfono" value={tel} onChange={setTel} />
+      <div className="mb-3">
+        <DatosOfertaEstado datos={firma} />
+      </div>
+      <DatosFirmaFields datos={firma} onChange={setFirma} idPrefix={`ficha-${c.id}`} />
+      <div className="mt-3 grid grid-cols-2 gap-3">
         <FichaField label="Presupuesto" value={presupuesto} onChange={setPresupuesto} />
         <div className="flex flex-col gap-1">
           <label className="text-[10px] font-semibold uppercase tracking-wider text-muted">Tipo</label>
@@ -296,7 +305,10 @@ function TabDatos({ c, isAgente }: { c: Comprador; isAgente: boolean }) {
         <div className="flex items-center gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-full text-sm font-bold text-white" style={{ background: `linear-gradient(135deg,${c.col})` }}>{c.ini}</div>
           <div className="flex-1">
-            <div className="text-base font-semibold text-white">{c.nombre}</div>
+            <div className="text-base font-semibold text-white">{nombreVisible(c)}</div>
+            <div className="mt-1">
+              <DatosOfertaEstado datos={datosFirmaFromComprador(c)} />
+            </div>
             <div className="text-xs text-white/40">{c.tipo} · NDA {c.nda}</div>
           </div>
           <span className="rounded-md bg-white/10 px-2.5 py-1 text-xs font-medium text-gold">{c.estado}</span>

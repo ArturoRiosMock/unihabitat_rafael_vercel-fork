@@ -5,6 +5,8 @@
  * y para que Turbopack no reexporte tipos desde una server action.
  */
 
+import { inicialesComprador } from "@/lib/comprador-oferta";
+
 export const GESTION_WINDOW_DAYS = 90;
 export const GESTION_WARNING_DAYS = 15;
 export const DAY_MS = 24 * 60 * 60 * 1000;
@@ -29,6 +31,7 @@ export type CompradorAccesoValor = "sin_acceso" | "activo";
 
 export interface CompradorFieldInput {
   nombre?: string;
+  apellidos?: string;
   email?: string;
   tel?: string;
   tipo?: "Privado" | "Free";
@@ -38,6 +41,14 @@ export interface CompradorFieldInput {
   presupuesto?: string;
   nda?: "Firmada" | "Pendiente";
   acceso?: CompradorAccesoValor;
+  tipoPersona?: "fisica" | "juridica";
+  razonSocial?: string;
+  documento?: string;
+  direccion?: string;
+  cp?: string;
+  poblacion?: string;
+  provincia?: string;
+  pais?: string;
 }
 
 export interface GestionSnapshot {
@@ -67,6 +78,7 @@ type Err = { ok: false; error: string };
 
 const FICHA_KEYS = [
   "nombre",
+  "apellidos",
   "email",
   "tel",
   "tipo",
@@ -74,7 +86,33 @@ const FICHA_KEYS = [
   "intereses",
   "presupuesto",
   "nda",
+  "razonSocial",
+  "documento",
+  "direccion",
+  "cp",
+  "poblacion",
+  "provincia",
+  "pais",
 ] as const;
+
+const FICHA_COLUMN: Record<(typeof FICHA_KEYS)[number], string> = {
+  nombre: "nombre",
+  apellidos: "apellidos",
+  email: "email",
+  tel: "tel",
+  tipo: "tipo",
+  estado: "estado",
+  intereses: "intereses",
+  presupuesto: "presupuesto",
+  nda: "nda",
+  razonSocial: "razon_social",
+  documento: "documento",
+  direccion: "direccion",
+  cp: "cp",
+  poblacion: "poblacion",
+  provincia: "provincia",
+  pais: "pais",
+};
 
 export function canReadComprador(
   actor: CompradorActor,
@@ -233,6 +271,7 @@ export function cronRequestAuthorized(
 
 export interface CreateCompradorPlan {
   nombre: string;
+  apellidos: string;
   email: string;
   acceso: CompradorAccesoValor;
   /** El agente queda asignado a sí mismo. El admin asigna después. */
@@ -243,7 +282,13 @@ export interface CreateCompradorPlan {
 
 export function planCompradorCreate(
   actor: CompradorActor,
-  input: { nombre: string; email: string; acceso?: CompradorAccesoValor; agente?: string },
+  input: {
+    nombre: string;
+    apellidos?: string;
+    email: string;
+    acceso?: CompradorAccesoValor;
+    agente?: string;
+  },
   agenteNombre: string,
 ): Ok<CreateCompradorPlan> | Err {
   switch (actor.role) {
@@ -261,6 +306,7 @@ export function planCompradorCreate(
   }
 
   const nombre = input.nombre.trim();
+  const apellidos = input.apellidos?.trim() ?? "";
   const email = input.email.trim().toLowerCase();
   if (!nombre || !email) return { ok: false, error: "Nombre y email son obligatorios" };
 
@@ -270,6 +316,7 @@ export function planCompradorCreate(
     return {
       ok: true,
       nombre,
+      apellidos,
       email,
       acceso: "sin_acceso",
       assignVendedorId: vendedorId,
@@ -281,6 +328,7 @@ export function planCompradorCreate(
   return {
     ok: true,
     nombre,
+    apellidos,
     email,
     acceso: input.acceso === "activo" ? "activo" : "sin_acceso",
     assignVendedorId: null,
@@ -320,7 +368,23 @@ export function planCompradorUpdate(
     if ((key === "nombre" || key === "email") && !trimmed) {
       return { ok: false, error: "Nombre y email son obligatorios" };
     }
-    patch[key] = key === "email" ? trimmed.toLowerCase() : trimmed;
+    const column = FICHA_COLUMN[key];
+    patch[column] = key === "email" ? trimmed.toLowerCase() : trimmed;
+  }
+  if (fields.nombre != null && fields.apellidos != null) {
+    patch.ini = inicialesComprador(fields.nombre, fields.apellidos);
+  }
+  if (fields.tipoPersona != null) {
+    switch (fields.tipoPersona) {
+      case "fisica":
+      case "juridica":
+        patch.tipo_persona = fields.tipoPersona;
+        break;
+      default: {
+        const unreachable: never = fields.tipoPersona;
+        return { ok: false, error: `Tipo de persona no válido: ${String(unreachable)}` };
+      }
+    }
   }
   if (actor.role === "admin" && fields.acceso != null) {
     patch.acceso = fields.acceso;

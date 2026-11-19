@@ -34,7 +34,8 @@ O comprador vê:
 - **Información completa** (`/portal/privado/inmueble/[slug]`, separador Información) inclui **Situación** só em leitura. Mesma origem que a ficha pública. Vazio → «—».
 - Dados sensíveis visíveis conforme permissões
 - **Solicitar información** — formulario → email interno ([`email-info-request.ts`](../../src/app/actions/email-info-request.ts))
-- **Submeter oferta** — valor em € + comentários → fluxo em `/portal/privado/ofertas`. O comentário mostra autor e data/hora (admin lê-se «Gestor»)
+- **Submeter oferta** — valor em € + comentários → fluxo em `/portal/privado/ofertas`. O comentário mostra autor e data/hora (admin lê-se «Gestor»). A oferta traz a ficha do comprador já preenchida (nome, apelidos, documento, morada, telefone, email). Se faltar algum dado obrigatório, o formulário pede-o e grava-o na ficha antes de enviar. Com a ficha completa, só se revê e envia
+- **Mis datos** (`/portal/privado/datos`) — o comprador edita essa ficha e vê «Datos completos» ou «Faltan: …»
 - **Documentos** — antes de listar ou descarregar os ficheiros do activo, o comprador aceita o NDA **desse** activo (texto provisional, versão em `src/lib/nda.ts`). Sem aceitação o servidor não devolve a lista nem a URL firmada. Documentos sem `asset_id` que já sejam só dele continuam visíveis.
 
 ## Ofertas (`/portal/privado/ofertas`)

@@ -126,7 +126,18 @@ export type CompradorAcceso = "sin_acceso" | "activo";
 
 export interface Comprador {
   id: string;
+  /** Nombre de pila. El nombre completo es nombre + apellidos. */
   nombre: string;
+  apellidos: string;
+  tipoPersona: "fisica" | "juridica";
+  razonSocial: string;
+  /** DNI, NIE o CIF. */
+  documento: string;
+  direccion: string;
+  cp: string;
+  poblacion: string;
+  provincia: string;
+  pais: string;
   ini: string;
   col: string;
   tipo: "Privado" | "Free";

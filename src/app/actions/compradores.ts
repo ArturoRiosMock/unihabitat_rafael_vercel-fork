@@ -13,6 +13,14 @@ import {
   type CompradorFieldInput,
 } from "@/lib/comprador-gestion";
 import {
+  datosFirmaFromRow,
+  inicialesComprador,
+  normalizarDatosFirma,
+  patchDatosFirma,
+  splitNombreCompleto,
+  type DatosFirma,
+} from "@/lib/comprador-oferta";
+import {
   fetchAssignedVendedorId,
   runReasignacionInactividad,
 } from "@/lib/comprador-gestion-run";
@@ -129,7 +137,11 @@ async function resolveAuthUserIdByEmail(email: string): Promise<string | null> {
 }
 
 /** Crea un registro de comprador si no existe (portal público / dev-auth sin fila en BD). */
-export async function ensureCompradorForEmail(email: string, nombre: string): Promise<string> {
+export async function ensureCompradorForEmail(
+  email: string,
+  nombre: string,
+  apellidos?: string,
+): Promise<string> {
   const existing = await fetchCompradorByEmail(email);
   const userId = await resolveAuthUserIdByEmail(email);
 
@@ -149,17 +161,23 @@ export async function ensureCompradorForEmail(email: string, nombre: string): Pr
   }
 
   const id = crypto.randomUUID();
-  const initials = nombre
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2) || "??";
+  const partes = apellidos != null
+    ? { nombre: nombre.trim(), apellidos: apellidos.trim() }
+    : splitNombreCompleto(nombre);
+  const nombrePila = partes.nombre || "Usuario";
   const c: Comprador = {
     id,
-    nombre: nombre.trim() || "Usuario",
-    ini: initials,
+    nombre: nombrePila,
+    apellidos: partes.apellidos,
+    tipoPersona: "fisica",
+    razonSocial: "",
+    documento: "",
+    direccion: "",
+    cp: "",
+    poblacion: "",
+    provincia: "",
+    pais: "España",
+    ini: inicialesComprador(nombrePila, partes.apellidos),
     col: "#2563a8,#0d2a4a",
     tipo: "Free",
     agente: "Admin",
@@ -194,6 +212,7 @@ export async function upsertComprador(c: Comprador): Promise<void> {
 
 export async function createComprador(input: {
   nombre: string;
+  apellidos?: string;
   email: string;
   tel?: string;
   tipo?: "Privado" | "Free";
@@ -214,19 +233,21 @@ export async function createComprador(input: {
   if (existingErr) throw new Error(existingErr.message);
   if (existing) throw new Error("Ya existe un comprador con ese email");
 
-  const initials = plan.nombre
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2) || "??";
   const now = new Date().toISOString();
 
   const c: Comprador = {
     id: crypto.randomUUID(),
     nombre: plan.nombre,
-    ini: initials,
+    apellidos: plan.apellidos,
+    tipoPersona: "fisica",
+    razonSocial: "",
+    documento: "",
+    direccion: "",
+    cp: "",
+    poblacion: "",
+    provincia: "",
+    pais: "España",
+    ini: inicialesComprador(plan.nombre, plan.apellidos),
     col: "#2563a8,#0d2a4a",
     tipo: input.tipo ?? "Privado",
     agente: plan.agenteNombre,
@@ -276,6 +297,35 @@ export async function updateCompradorFields(
   if (plan.renewsGestion) row.ultima_gestion_agente_at = new Date().toISOString();
   const { error } = await sb.from("compradores").update(row).eq("id", id);
   if (error) throw new Error(error.message);
+}
+
+/**
+ * El comprador actualiza su propia ficha de firma.
+ * El email queda anclado a la cuenta: no se puede cambiar desde el portal.
+ */
+export async function updateMisDatosComprador(datos: DatosFirma): Promise<void> {
+  const session = await getServerSession();
+  if (!session?.email || session.role !== "cliente") {
+    throw new Error("Acceso denegado");
+  }
+
+  const sb = await createServiceClient();
+  const { data, error } = await sb
+    .from("compradores")
+    .select("*")
+    .ilike("email", session.email.trim())
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Comprador no encontrado");
+
+  const stored = datosFirmaFromRow(data);
+  const next = normalizarDatosFirma({ ...datos, email: stored.email });
+  const patch = patchDatosFirma(stored, next);
+  if (Object.keys(patch).length === 0) return;
+
+  const { error: updateError } = await sb.from("compradores").update(patch).eq("id", data.id);
+  if (updateError) throw new Error(updateError.message);
 }
 
 export async function setCompradorAcceso(id: string, acceso: CompradorAcceso): Promise<void> {

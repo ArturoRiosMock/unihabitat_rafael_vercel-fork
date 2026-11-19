@@ -9,6 +9,7 @@ import { getPublicAppOrigin } from "@/lib/app-public-url";
 import { getDeudaTotal, fmt } from "@/lib/utils";
 import { assetPortalHref } from "@/lib/public-slug";
 import { rowToAsset } from "@/lib/supabase/db";
+import { nombreCompleto } from "@/lib/comprador-oferta";
 
 export interface CompradorAssetRow {
   comprador_id: string;
@@ -35,7 +36,7 @@ export async function inviteCompradorToAsset(
   try {
     const { data: comp } = await supabase
       .from("compradores")
-      .select("nombre, email, user_id")
+      .select("nombre, apellidos, email, user_id")
       .eq("id", compradorId)
       .maybeSingle();
 
@@ -45,7 +46,7 @@ export async function inviteCompradorToAsset(
       .eq("id", assetId)
       .maybeSingle();
 
-    const nombre = comp?.nombre ?? compradorId;
+    const nombre = nombreCompleto(comp?.nombre as string | undefined, comp?.apellidos as string | undefined) || compradorId;
     const asset = assetRow ? rowToAsset(assetRow) : null;
     const lugar = asset ? [asset.pob, asset.prov].filter(Boolean).join(", ") : assetId;
     const tipologia = asset?.tip || undefined;
