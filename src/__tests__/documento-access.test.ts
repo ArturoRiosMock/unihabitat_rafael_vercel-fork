@@ -5,6 +5,8 @@ import {
   canListAssetDocumentos,
   canReadDocumento,
   canWriteDocumento,
+  listAssetDocumentosDecision,
+  readDocumentoDecision,
   type DocumentoAccessFacts,
 } from "@/lib/documento-access";
 
@@ -13,23 +15,50 @@ const agente: DocumentoAccessFacts = {
   role: "vendedor",
   vendedorId: "vend-1",
   assignedAssetIds: ["TEST-DOC-001"],
+  acceptedNdaAssetIds: ["TEST-DOC-001"],
+};
+const agenteSinNda: DocumentoAccessFacts = {
+  role: "vendedor",
+  vendedorId: "vend-1",
+  assignedAssetIds: ["TEST-DOC-001", "ACTIVO-B"],
+  acceptedNdaAssetIds: [],
+};
+const agenteSoloA: DocumentoAccessFacts = {
+  role: "vendedor",
+  vendedorId: "vend-1",
+  assignedAssetIds: ["TEST-DOC-001", "ACTIVO-B"],
+  acceptedNdaAssetIds: ["TEST-DOC-001"],
 };
 const otroAgente: DocumentoAccessFacts = {
   role: "vendedor",
   vendedorId: "vend-2",
   assignedAssetIds: ["OTRO"],
+  acceptedNdaAssetIds: ["OTRO"],
 };
 const sinAsignar: DocumentoAccessFacts = {
   role: "vendedor",
   vendedorId: "vend-1",
   assignedAssetIds: [],
+  acceptedNdaAssetIds: ["TEST-DOC-001"],
 };
-const comprador: DocumentoAccessFacts = { role: "cliente", compradorId: "comp-1" };
+const comprador: DocumentoAccessFacts = {
+  role: "cliente",
+  compradorId: "comp-1",
+  acceptedNdaAssetIds: ["TEST-DOC-001"],
+};
+const compradorSinNda: DocumentoAccessFacts = {
+  role: "cliente",
+  compradorId: "comp-1",
+  acceptedNdaAssetIds: [],
+};
 
 const notaSimple = { asset_id: "TEST-DOC-001", comprador_id: null };
+const activoB = { asset_id: "ACTIVO-B", comprador_id: null };
 const ajeno = { asset_id: "OTRO", comprador_id: null };
 const delComprador = { asset_id: "TEST-DOC-001", comprador_id: "comp-1" };
+const delCompradorB = { asset_id: "ACTIVO-B", comprador_id: "comp-1" };
 const deOtroComprador = { asset_id: "TEST-DOC-001", comprador_id: "comp-2" };
+const personal = { asset_id: null, comprador_id: "comp-1" };
 
 describe("acceso a documentos", () => {
   it("el admin lee y escribe cualquier documento", () => {
@@ -58,10 +87,37 @@ describe("acceso a documentos", () => {
 
   it("el comprador solo lee las filas con su comprador_id", () => {
     expect(canReadDocumento(comprador, delComprador)).toBe(true);
+    expect(canReadDocumento(comprador, personal)).toBe(true);
     expect(canReadDocumento(comprador, notaSimple)).toBe(false);
     expect(canReadDocumento(comprador, deOtroComprador)).toBe(false);
     expect(canListAssetDocumentos(comprador, "TEST-DOC-001")).toBe(false);
     expect(canWriteDocumento(comprador, "TEST-DOC-001")).toBe(false);
+  });
+
+  it("sin NDA no hay acceso al activo, aunque esté asignado", () => {
+    expect(listAssetDocumentosDecision(agenteSinNda, "TEST-DOC-001")).toBe("nda");
+    expect(readDocumentoDecision(agenteSinNda, notaSimple)).toBe("nda");
+    expect(canListAssetDocumentos(agenteSinNda, "TEST-DOC-001")).toBe(false);
+    expect(canReadDocumento(agenteSinNda, notaSimple)).toBe(false);
+    expect(listAssetDocumentosDecision(compradorSinNda, "TEST-DOC-001")).toBe("nda");
+    expect(readDocumentoDecision(compradorSinNda, delComprador)).toBe("nda");
+  });
+
+  it("el NDA del activo A abre A y no B", () => {
+    expect(listAssetDocumentosDecision(agenteSoloA, "TEST-DOC-001")).toBe("ok");
+    expect(readDocumentoDecision(agenteSoloA, notaSimple)).toBe("ok");
+    expect(listAssetDocumentosDecision(agenteSoloA, "ACTIVO-B")).toBe("nda");
+    expect(readDocumentoDecision(agenteSoloA, activoB)).toBe("nda");
+    expect(canReadDocumento(agenteSoloA, activoB)).toBe(false);
+    expect(readDocumentoDecision(comprador, delCompradorB)).toBe("nda");
+    expect(canReadDocumento(comprador, delComprador)).toBe(true);
+  });
+
+  it("el admin accede sin NDA", () => {
+    expect(listAssetDocumentosDecision(admin, "TEST-DOC-001")).toBe("ok");
+    expect(listAssetDocumentosDecision(admin, "ACTIVO-B")).toBe("ok");
+    expect(readDocumentoDecision(admin, notaSimple)).toBe("ok");
+    expect(readDocumentoDecision(admin, activoB)).toBe("ok");
   });
 });
 
@@ -82,5 +138,25 @@ describe("la migración no relaja notas ni el bucket público", () => {
     expect(migration).not.toContain('for insert');
     expect(migration).not.toContain("informacion_adicional_anon_select\"\n  on");
     expect(migration).toContain('for select\n  using (public.is_vendedor())');
+  });
+});
+
+describe("migración del NDA por activo", () => {
+  const migration = readFileSync(
+    resolve(__dirname, "../../supabase/migrations/20261119b_nda_aceptaciones_activo.sql"),
+    "utf8",
+  );
+
+  it("crea la tabla idempotente, el unique y la RLS sin leer vendedores", () => {
+    expect(migration).toContain("create table if not exists public.asset_nda_aceptaciones");
+    expect(migration).toContain("unique (asset_id, user_id, version)");
+    expect(migration).toContain("enable row level security");
+    expect(migration).toContain("asset_nda_aceptaciones_admin");
+    expect(migration).toContain("asset_nda_aceptaciones_agente_select");
+    expect(migration).toContain("asset_nda_aceptaciones_agente_insert");
+    expect(migration).toContain("user_id = auth.uid()");
+    expect(migration).toContain("public.is_admin()");
+    expect(migration).not.toMatch(/from\s+public\.vendedores/i);
+    expect(migration).not.toContain("vendedor_assets");
   });
 });

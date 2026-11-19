@@ -46,6 +46,9 @@ const mocks = vi.hoisted(() => ({
     uploaded_by: string;
     created_at: string;
   }>),
+  getAssetDocumentosGate: vi.fn(async () => ({ state: "open" as const })),
+  fetchAssetNdaSigners: vi.fn(async () => [] as Array<{ nombreFirma: string; acceptedAt: string; version: string }>),
+  acceptAssetNda: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/lib/context", () => ({
@@ -77,6 +80,9 @@ vi.mock("@/app/actions/documentos", () => ({
   fetchDocumentos: (...args: unknown[]) => mocks.fetchDocumentos(...args),
   deleteDocumento: vi.fn(),
   getDocumentUrl: vi.fn(),
+  getAssetDocumentosGate: (...args: unknown[]) => mocks.getAssetDocumentosGate(...args),
+  fetchAssetNdaSigners: (...args: unknown[]) => mocks.fetchAssetNdaSigners(...args),
+  acceptAssetNda: (...args: unknown[]) => mocks.acceptAssetNda(...args),
 }));
 
 vi.mock("@/app/actions/informacion-adicional", () => ({
@@ -238,6 +244,10 @@ describe("Situación en la pestaña Características", () => {
     });
     mocks.fetchDocumentos.mockReset();
     mocks.fetchDocumentos.mockResolvedValue([]);
+    mocks.getAssetDocumentosGate.mockReset();
+    mocks.getAssetDocumentosGate.mockResolvedValue({ state: "open" });
+    mocks.fetchAssetNdaSigners.mockReset();
+    mocks.fetchAssetNdaSigners.mockResolvedValue([]);
     currentAsset = makeAsset("Reservado");
   });
 
@@ -407,6 +417,9 @@ describe("pestaña Documentación del agente", () => {
     mocks.session.role = "vendedor";
     currentAsset = makeAsset("Reservado");
     mocks.fetchDocumentos.mockReset();
+    mocks.getAssetDocumentosGate.mockReset();
+    mocks.getAssetDocumentosGate.mockResolvedValue({ state: "open" });
+    mocks.acceptAssetNda.mockReset();
   });
 
   it("sigue en la ficha y muestra los PDF autorizados", async () => {
@@ -456,5 +469,98 @@ describe("pestaña Documentación del agente", () => {
     expect(screen.getByRole("button", { name: "Documentación" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Valdemoro, Madrid" })).toBeVisible();
     expect(screen.queryByText("No hay documentos subidos aún")).not.toBeInTheDocument();
+  });
+
+  it("sin NDA muestra el texto del activo y no lista los PDF", async () => {
+    const user = userEvent.setup();
+    mocks.getAssetDocumentosGate.mockResolvedValue({
+      state: "nda",
+      version: "2026-11-19-provisional",
+      assetLabel: "Valdemoro (ref. ACT-1)",
+      text: "ACUERDO DE CONFIDENCIALIDAD\nActivo: Valdemoro (ref. ACT-1)\nTexto provisional.",
+    });
+    renderFicha();
+
+    await user.click(await screen.findByRole("button", { name: "Documentación" }));
+
+    expect(await screen.findByRole("checkbox", { name: "He leído y acepto" })).toBeVisible();
+    expect(screen.getByRole("textbox", { name: /Nombre completo/ })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Firmar / Aceptar NDA" })).toBeDisabled();
+    expect(screen.getAllByText(/Valdemoro \(ref\. ACT-1\)/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/No es el clausulado legal definitivo/)).toBeVisible();
+    expect(screen.queryByText("nota-simple.pdf")).not.toBeInTheDocument();
+    expect(mocks.fetchDocumentos).not.toHaveBeenCalled();
+  });
+
+  it("al aceptar el NDA lista los documentos de ese activo", async () => {
+    const user = userEvent.setup();
+    mocks.getAssetDocumentosGate
+      .mockResolvedValueOnce({
+        state: "nda",
+        version: "2026-11-19-provisional",
+        assetLabel: "Valdemoro (ref. ACT-1)",
+        text: "Texto provisional del activo Valdemoro (ref. ACT-1).",
+      })
+      .mockResolvedValueOnce({ state: "open" });
+    mocks.fetchDocumentos.mockResolvedValue([
+      {
+        id: "d1",
+        asset_id: "ACT-1",
+        comprador_id: null,
+        name: "nota-simple.pdf",
+        storage_path: "assets/ACT-1/nota-simple.pdf",
+        icon_type: "pdf",
+        size_bytes: 1200,
+        uploaded_by: "Admin",
+        created_at: "2026-03-01T00:00:00.000Z",
+      },
+    ]);
+    renderFicha();
+
+    await user.click(await screen.findByRole("button", { name: "Documentación" }));
+    await user.click(await screen.findByRole("checkbox", { name: "He leído y acepto" }));
+    await user.type(screen.getByRole("textbox", { name: /Nombre completo/ }), "Agente Uno");
+    await user.click(screen.getByRole("button", { name: "Firmar / Aceptar NDA" }));
+
+    expect(await screen.findByText("nota-simple.pdf")).toBeVisible();
+    expect(mocks.acceptAssetNda).toHaveBeenCalledWith({
+      assetId: "ACT-1",
+      nombre: "Agente Uno",
+      accepted: true,
+    });
+    expect(mocks.fetchDocumentos).toHaveBeenCalledWith({ assetId: "ACT-1" });
+  });
+});
+
+describe("firmas del NDA en la ficha", () => {
+  beforeEach(() => {
+    mocks.session.role = "admin";
+    currentAsset = makeAsset("Reservado");
+    mocks.getAssetDocumentosGate.mockReset();
+    mocks.getAssetDocumentosGate.mockResolvedValue({ state: "open" });
+    mocks.fetchDocumentos.mockReset();
+    mocks.fetchDocumentos.mockResolvedValue([]);
+    mocks.fetchAssetNdaSigners.mockReset();
+    mocks.fetchAssetNdaSigners.mockResolvedValue([
+      {
+        nombreFirma: "Lucía Agent",
+        acceptedAt: "2026-11-19T10:30:00.000Z",
+        version: "2026-11-19-provisional",
+      },
+    ]);
+  });
+
+  it("el admin ve el nombre del agente y no la etiqueta Gestor", async () => {
+    const user = userEvent.setup();
+    renderFicha();
+
+    await user.click(await screen.findByRole("button", { name: "Documentación" }));
+
+    expect(await screen.findByText("Lucía Agent")).toBeVisible();
+    expect(screen.getByText("NDA aceptados")).toBeVisible();
+    expect(screen.queryByText("Gestor")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Administrador" }));
+    expect(await screen.findByText("Lucía Agent")).toBeVisible();
   });
 });

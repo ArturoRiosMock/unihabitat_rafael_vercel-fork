@@ -7,7 +7,9 @@ import Link from "next/link";
 import type { Asset } from "@/lib/types";
 import { publicationListLabel } from "@/lib/asset-publication";
 import { Home, FolderOpen, Briefcase, Users, Lock, ArrowLeft, Upload, Download, FileText, FileSpreadsheet, Image, MessageSquare, Save, Plus, Mail, X, Loader2, AlertCircle, CheckCircle2, CheckCircle, Building, ExternalLink, RefreshCw, UserCog, Send, Link2 } from "lucide-react";
-import { uploadDocumento, fetchDocumentos, deleteDocumento, getDocumentUrl, type DocRow } from "@/app/actions/documentos";
+import { uploadDocumento, fetchDocumentos, deleteDocumento, getDocumentUrl, getAssetDocumentosGate, type DocRow } from "@/app/actions/documentos";
+import { AssetNdaAcceptForm, AssetNdaSigners } from "@/components/AssetNdaGate";
+import type { AssetDocumentosGate } from "@/lib/nda";
 import { createNota, deleteNota, fetchNotas, type NotaRow } from "@/app/actions/notas";
 import { AssetNoteCard } from "@/components/AssetNoteCard";
 import { fetchCompradores } from "@/app/actions/compradores";
@@ -201,7 +203,7 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
         {/* Content */}
         <div className="flex-1 overflow-y-auto bg-cream p-6">
           {tab === 0 && <TabCaracteristicas asset={asset} assetId={id} currentUser={currentUser} reloadAsset={loadRemote} canDeleteNotes={userIsAdmin} canWriteInfo={userIsAdmin} />}
-          {tab === 1 && <TabDocumentacion assetId={id} currentUser={currentUser} />}
+          {tab === 1 && <TabDocumentacion assetId={id} currentUser={currentUser} isAdmin={userIsAdmin} />}
           {tab === 2 && userIsAdmin && <TabAgentes asset={asset} assetId={id} currentUser={currentUser} canDeleteNotes={userIsAdmin} />}
           {tab === 3 && userIsAdmin && <TabClientes assetId={id} />}
           {tab === 4 && userIsAdmin && <TabAdmin asset={asset} assetId={id} togglePub={() => void handleTogglePub()} currentUser={currentUser} reloadAsset={loadRemote} canDeleteNotes={userIsAdmin} />}
@@ -906,8 +908,9 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset, canDelet
   );
 }
 
-function TabDocumentacion({ assetId, currentUser }: { assetId: string; currentUser: { nombre: string; email: string } | null }) {
+function TabDocumentacion({ assetId, currentUser, isAdmin: adminView }: { assetId: string; currentUser: { nombre: string; email: string } | null; isAdmin: boolean }) {
   const [docs, setDocs] = useState<DocRow[]>([]);
+  const [gate, setGate] = useState<AssetDocumentosGate | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -925,6 +928,12 @@ function TabDocumentacion({ assetId, currentUser }: { assetId: string; currentUs
     setLoading(true);
     setLoadError("");
     try {
+      const nextGate = await getAssetDocumentosGate(assetId);
+      setGate(nextGate);
+      if (nextGate.state !== "open") {
+        setDocs([]);
+        return;
+      }
       const fetched = await fetchDocumentos({ assetId });
       setDocs(fetched);
     } catch (err) {
@@ -932,6 +941,7 @@ function TabDocumentacion({ assetId, currentUser }: { assetId: string; currentUs
       // un documento ajeno es «Acceso denegado», no una sección prohibida.
       console.error("Error cargando datos:", err);
       setDocs([]);
+      setGate(null);
       setLoadError(err instanceof Error ? err.message : "No se pudieron cargar los documentos");
     } finally {
       setLoading(false);
@@ -995,8 +1005,25 @@ function TabDocumentacion({ assetId, currentUser }: { assetId: string; currentUs
     handleFileSelect(e.dataTransfer.files);
   };
 
+  if (!loading && !loadError && gate?.state === "nda") {
+    return (
+      <AssetNdaAcceptForm
+        assetId={assetId}
+        assetLabel={gate.assetLabel}
+        text={gate.text}
+        version={gate.version}
+        onAccepted={() => void loadData()}
+      />
+    );
+  }
+
   return (
     <>
+          {adminView ? (
+            <div className="mb-4">
+              <AssetNdaSigners assetId={assetId} />
+            </div>
+          ) : null}
           <div
             ref={dropZoneRef}
             onDragOver={handleDragOver}
@@ -1425,6 +1452,9 @@ function TabAdmin({ asset, assetId, togglePub, currentUser, reloadAsset, canDele
 
   return (
     <>
+      <div className="mb-4">
+        <AssetNdaSigners assetId={assetId} />
+      </div>
       <div className="mb-4 grid grid-cols-2 gap-4">
         <SectionCard title="Estado de publicación">
           <div className="mb-3 flex items-center gap-2.5">

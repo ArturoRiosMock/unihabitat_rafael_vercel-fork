@@ -71,6 +71,7 @@ Campos que antes viviam em `asset.adm.*` devem ser lidos de `asset.propiedades[]
 | Notificacion | `notificaciones` | Alertas in-app (+ email espelhado) |
 | Nota | `notas` | `scope`: `activo` (Características; cada agente vê as suas, admin todas) ou `privada` (só admin). `author_id` e `author_role` = quem criou. Na UI, rol `admin` lê-se «Gestor». «Mis notas» do portal leva `comprador_id`. DELETE só admin |
 | Comentário do comprador | `comprador_comentarios` | Chamadas e ações na ficha do comprador. Admin vê tudo. O agente só o comprador que gere (`vendedor_compradores`) |
+| NDA do activo | `asset_nda_aceptaciones` | Uma fila por activo, utilizador e versão do texto. Nome escrito, data, IP, user-agent. Admin vê tudo. Agente e comprador só as suas (`auth.uid()`), sem ler `vendedores` |
 
 Tabelas de relação: `comprador_assets` (convites), `comprador_favoritos`, `vendedor_permissions`, `vendedor_assets`, `vendedor_compradores`.
 
@@ -96,6 +97,7 @@ Todo acesso DB passa por [`src/lib/supabase/db.ts`](../../src/lib/supabase/db.ts
 | `supabase/migrations/20261109_notas_admin_delete.sql` | Política DELETE de notas só admin |
 | `supabase/migrations/20261109_notas_select_visibilidad.sql` | SELECT: agente só as suas; comprador só as suas; privadas só via admin |
 | `supabase/migrations/20261119_comentarios_autor_y_actividad.sql` | `author_role` em notas, autor da informação adicional e do comentário da oferta, tabela `comprador_comentarios` |
+| `supabase/migrations/20261119b_nda_aceptaciones_activo.sql` | `asset_nda_aceptaciones`: NDA por activo para abrir a documentação. Idempotente. Staging; não produção neste passo |
 
 Ver [migrations-supabase.md](../operacoes/migrations-supabase.md).
 

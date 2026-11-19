@@ -119,7 +119,7 @@ Todas em `src/app/actions/`. Padrão: `"use server"`, auth via `auth-server.ts`,
 | [`comprador-comentarios.ts`](../../src/app/actions/comprador-comentarios.ts) | `fetchCompradorComentarios`, `createCompradorComentario`. Admin: todos. Agente: só o comprador que gere |
 | [`mensajes.ts`](../../src/app/actions/mensajes.ts) | `fetchMensajes`, `sendMensaje` |
 | [`informacion-adicional.ts`](../../src/app/actions/informacion-adicional.ts) | `fetchInformacionAdicional` (admin e agente), `saveInformacionAdicional` (só admin) |
-| [`documentos.ts`](../../src/app/actions/documentos.ts) | Lista e URL firmada (`createSignedUrl`, bucket privado, 1 h). Agente: só `vendedor_assets`. Comprador: só o seu `comprador_id` |
+| [`documentos.ts`](../../src/app/actions/documentos.ts) | Lista e URL firmada (`createSignedUrl`, bucket privado, 1 h). Agente: `vendedor_assets` e NDA do activo. Comprador: o seu `comprador_id` e, se o ficheiro é do activo, o NDA. Admin sem NDA. `getAssetDocumentosGate`, `acceptAssetNda`, `fetchAssetNdaSigners` |
 
 ## Favoritos e sessão
 

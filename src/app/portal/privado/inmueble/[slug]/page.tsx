@@ -1,9 +1,11 @@
 "use client";
 
-import { use, useState, useEffect } from "react";
+import { use, useState, useEffect, useCallback } from "react";
 import { fetchAssetByPublicSlug } from "@/app/actions/assets";
 import { createNota, fetchNotas, type NotaRow } from "@/app/actions/notas";
-import { fetchDocumentos, getDocumentUrl, type DocRow } from "@/app/actions/documentos";
+import { fetchDocumentos, getDocumentUrl, getAssetDocumentosGate, type DocRow } from "@/app/actions/documentos";
+import { AssetNdaAcceptForm } from "@/components/AssetNdaGate";
+import type { AssetDocumentosGate } from "@/lib/nda";
 import { ensureCompradorForEmail } from "@/app/actions/compradores";
 import type { Asset } from "@/lib/types";
 import { displaySituacion, fmtM, getDescriptionText, getPortalPriceDisplay } from "@/lib/utils";
@@ -207,18 +209,31 @@ export default function PortalPrivadoInmuebleSlugPage({
 
 function MisDocumentosPanel({ assetId }: { assetId: string }) {
   const [docs, setDocs] = useState<DocRow[]>([]);
+  const [gate, setGate] = useState<AssetDocumentosGate | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     let cancelled = false;
     setLoading(true);
-    fetchDocumentos({ assetId })
-      .then((rows) => {
+    setLoadError("");
+    getAssetDocumentosGate(assetId)
+      .then(async (nextGate) => {
+        if (cancelled) return;
+        setGate(nextGate);
+        if (nextGate.state !== "open") {
+          setDocs([]);
+          return;
+        }
+        const rows = await fetchDocumentos({ assetId });
         if (!cancelled) setDocs(rows);
       })
-      .catch(() => {
-        if (!cancelled) setDocs([]);
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setGate(null);
+        setDocs([]);
+        setLoadError(err instanceof Error ? err.message : "No se pudieron cargar los documentos");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -227,6 +242,8 @@ function MisDocumentosPanel({ assetId }: { assetId: string }) {
       cancelled = true;
     };
   }, [assetId]);
+
+  useEffect(() => load(), [load]);
 
   async function handleDownload(doc: DocRow) {
     setDownloadingId(doc.id);
@@ -246,6 +263,26 @@ function MisDocumentosPanel({ assetId }: { assetId: string }) {
     return (
       <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted">
         <Loader2 size={16} className="animate-spin" /> Cargando documentos…
+      </div>
+    );
+  }
+
+  if (gate?.state === "nda") {
+    return (
+      <AssetNdaAcceptForm
+        assetId={assetId}
+        assetLabel={gate.assetLabel}
+        text={gate.text}
+        version={gate.version}
+        onAccepted={load}
+      />
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div role="alert" className="rounded-lg border border-red/20 bg-red/10 px-3 py-2 text-xs text-red">
+        {loadError}
       </div>
     );
   }

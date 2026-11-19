@@ -16,6 +16,8 @@ vi.mock("@/app/actions/notas", () => ({
 vi.mock("@/app/actions/documentos", () => ({
   fetchDocumentos: vi.fn(async () => []),
   getDocumentUrl: vi.fn(),
+  getAssetDocumentosGate: vi.fn(async () => ({ state: "open" })),
+  acceptAssetNda: vi.fn(),
 }));
 
 vi.mock("@/app/actions/compradores", () => ({

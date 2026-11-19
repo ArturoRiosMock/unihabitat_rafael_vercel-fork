@@ -79,9 +79,11 @@ Entre **Descripción del Activo** e **Notas del activo** está o quadro **Inform
 
 SQL idempotente: `supabase/migrations/20261109_informacion_adicional_y_documentos_agente.sql`. Não aplicar em produção neste passo; correr no SQL Editor de staging.
 
-**Descargar** (ficha `/admin/assets/[id]` → **Documentación**, admin e agente atribuído) abre uma URL firmada (`createSignedUrl`, 1 h). O bucket `documentos` é privado: não usar `getPublicUrl`. O mesmo vale para **Documentos** em `/portal/privado/inmueble/[slug]` (só filas com o `comprador_id` desse comprador).
+**Descargar** (ficha `/admin/assets/[id]` → **Documentación**, admin e agente atribuído que já aceitou o NDA) abre uma URL firmada (`createSignedUrl`, 1 h). O bucket `documentos` é privado: não usar `getPublicUrl`. O mesmo vale para **Documentos** em `/portal/privado/inmueble/[slug]` (só filas com o `comprador_id` desse comprador, e só depois do NDA desse activo).
 
-O agente só lista e assina documentos de activos presentes em `vendedor_assets`. Sem atribuição, a pestana mostra o erro e **não** volta ao listado `/admin`. A saída para `/admin` continua reservada a secções que o agente não pode ver, e só depois de os permissões terem carregado.
+O agente só lista e assina documentos de activos presentes em `vendedor_assets` **e** com NDA aceite para esse activo e essa versão do texto. Sem atribuição, a pestana mostra o erro e **não** volta ao listado `/admin`. Sem NDA, vê o texto (com o nome/ref do activo), a caixa «He leído y acepto» e o nome completo; ao aceitar grava-se a fila e a lista abre. Aceitar A não abre B. O admin não assina: em **Documentación** e em **Administrador** vê quem assinou e quando (o nome escrito; aqui não se usa «Gestor»). A saída para `/admin` continua reservada a secções que o agente não pode ver, e só depois de os permissões terem carregado.
+
+SQL idempotente do NDA: `supabase/migrations/20261119b_nda_aceptaciones_activo.sql`. Não aplicar em produção neste passo; correr no SQL Editor de staging. O texto legal é provisional (`ASSET_NDA_VERSION` em `src/lib/nda.ts`).
 
 ### Quem vê cada nota
 

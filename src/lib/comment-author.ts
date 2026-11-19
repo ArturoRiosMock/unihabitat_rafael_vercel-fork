@@ -19,6 +19,16 @@ export function displayCommentAuthor(input: CommentAuthorInput): string {
 }
 
 /**
+ * Nombre de quien aceptó el NDA de un activo.
+ * Firman agentes y compradores: nunca se muestra «Gestor».
+ */
+export function displayNdaSignerName(nombre: string | null | undefined): string {
+  const name = nombre?.trim() ?? "";
+  if (!name) return "Firmante";
+  return displayCommentAuthor({ author: name, authorRole: "vendedor" });
+}
+
+/**
  * Fecha y hora de un comentario, en español.
  * Devuelve null si no hay fecha o no se puede leer.
  */

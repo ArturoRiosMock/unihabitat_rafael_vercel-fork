@@ -35,6 +35,7 @@ O comprador vê:
 - Dados sensíveis visíveis conforme permissões
 - **Solicitar información** — formulario → email interno ([`email-info-request.ts`](../../src/app/actions/email-info-request.ts))
 - **Submeter oferta** — valor em € + comentários → fluxo em `/portal/privado/ofertas`. O comentário mostra autor e data/hora (admin lê-se «Gestor»)
+- **Documentos** — antes de listar ou descarregar os ficheiros do activo, o comprador aceita o NDA **desse** activo (texto provisional, versão em `src/lib/nda.ts`). Sem aceitação o servidor não devolve a lista nem a URL firmada. Documentos sem `asset_id` que já sejam só dele continuam visíveis.
 
 ## Ofertas (`/portal/privado/ofertas`)
 

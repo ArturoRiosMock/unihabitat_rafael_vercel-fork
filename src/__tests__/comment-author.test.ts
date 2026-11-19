@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { displayCommentAuthor, formatCommentTimestamp, GESTOR_AUTHOR_LABEL } from "@/lib/comment-author";
+import { displayCommentAuthor, displayNdaSignerName, formatCommentTimestamp, GESTOR_AUTHOR_LABEL } from "@/lib/comment-author";
 
 describe("displayCommentAuthor", () => {
   it("el administrador se muestra como Gestor", () => {
@@ -18,6 +18,16 @@ describe("displayCommentAuthor", () => {
   it("sin dato de autor muestra Gestor", () => {
     expect(displayCommentAuthor({ author: "  ", authorRole: null })).toBe(GESTOR_AUTHOR_LABEL);
     expect(displayCommentAuthor({ author: null, authorRole: null })).toBe(GESTOR_AUTHOR_LABEL);
+  });
+});
+
+describe("displayNdaSignerName", () => {
+  it("muestra el nombre escrito y nunca Gestor", () => {
+    expect(displayNdaSignerName("Lucía Agent")).toBe("Lucía Agent");
+    expect(displayNdaSignerName("  Ana López  ")).toBe("Ana López");
+    expect(displayNdaSignerName("")).toBe("Firmante");
+    expect(displayNdaSignerName(null)).toBe("Firmante");
+    expect(displayNdaSignerName("Lucía Agent")).not.toBe(GESTOR_AUTHOR_LABEL);
   });
 });
 

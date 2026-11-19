@@ -77,7 +77,9 @@ Writes sensíveis usam **service-role** nas server actions (bypass RLS controlad
 
 **Información adicional:** tabela `asset_informacion_adicional`, uma fila por activo. `fetchInformacionAdicional` deixa admin e vendedor. `saveInformacionAdicional` recusa quem não é admin. RLS: `informacion_adicional_admin` (ALL) e `informacion_adicional_agente_select` (SELECT). Sem política para anon nem comprador. Não lê `notas`.
 
-**Documentos:** `fetchDocumentos` / `getDocumentUrl` usam service role depois da sessão. Admin vê tudo. Vendedor só se `vendedor_assets` contém o activo. Comprador só filas com o seu `comprador_id`. `getDocumentUrl` assina com `createSignedUrl` (1 h) e não chama `getPublicUrl`. A política `documentos_agente_select` repete o SELECT do agente no PostgREST. `documentos_admin` e `documentos_client_read` mantêm-se.
+**Documentos:** `fetchDocumentos` / `getDocumentUrl` usam service role depois da sessão. Admin vê tudo, sem NDA. Vendedor só se `vendedor_assets` contém o activo **e** aceitou o NDA dessa versão para esse activo (`asset_nda_aceptaciones`). O NDA de A não abre B. Comprador só filas com o seu `comprador_id`; se a fila tem `asset_id`, também exige o NDA desse activo. Sem NDA a action responde `NDA no aceptado` e não assina a URL. `getDocumentUrl` usa `createSignedUrl` (1 h) e não chama `getPublicUrl`. A política `documentos_agente_select` repete o SELECT do agente no PostgREST. `documentos_admin` e `documentos_client_read` mantêm-se.
+
+**NDA por activo:** texto provisional em `src/lib/nda.ts` (`ASSET_NDA_VERSION`). A aceitação guarda activo, `auth.users.id`, nome escrito, data, IP, user-agent e versão. RLS: admin tudo; agente e comprador só `user_id = auth.uid()` (sem ler `vendedores`). A app usa service role.
 
 ## Ficheiros relacionados
 

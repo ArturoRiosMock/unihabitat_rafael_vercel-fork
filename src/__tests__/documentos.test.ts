@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { NDA_NOT_ACCEPTED } from "@/lib/nda";
 
 const getServerSession = vi.fn();
 
@@ -12,14 +13,16 @@ const adminSession = { role: "admin" as const, nombre: "Ana", email: "admin@test
 const agenteSession = {
   role: "vendedor" as const,
   nombre: "Agente 1",
-  email: "agente1@test",
+  email: "agente1@propcrm.com",
   vendedorId: "vend-1",
+  userId: "user-agente",
 };
 const compradorSession = {
   role: "cliente" as const,
   nombre: "Cliente",
   email: "cliente@test",
   compradorId: "comp-1",
+  userId: "user-comp",
 };
 
 function query(result: { data: unknown; error: { message: string } | null }) {
@@ -35,6 +38,36 @@ function query(result: { data: unknown; error: { message: string } | null }) {
   q.maybeSingle = vi.fn(async () => result);
   q.insert = vi.fn(async () => ({ error: result.error }));
   q.delete = vi.fn(() => ({ eq: vi.fn(async () => ({ error: result.error })) }));
+  return q;
+}
+
+/** Filas de `vendedor_assets` o de aceptaciones NDA, filtradas por el `.in()`. */
+function idListQuery(assetIds: string[]) {
+  const q = query({ data: [], error: null });
+  q.in = vi.fn(async (_column: string, ids: string[]) => ({
+    data: ids.filter((id) => assetIds.includes(id)).map((asset_id) => ({ asset_id })),
+    error: null,
+  }));
+  return q;
+}
+
+function docsTable(rows: Array<{ asset_id: string | null; storage_path: string }>) {
+  const q = query({ data: null, error: null });
+  let path = "";
+  let assetId = "";
+  q.eq = vi.fn((col: string, val: string) => {
+    if (col === "storage_path") path = val;
+    if (col === "asset_id") assetId = val;
+    return q;
+  });
+  q.maybeSingle = vi.fn(async () => ({
+    data: rows.find((row) => row.storage_path === path) ?? null,
+    error: null,
+  }));
+  q.order = vi.fn(async () => ({
+    data: rows.filter((row) => row.asset_id === assetId),
+    error: null,
+  }));
   return q;
 }
 
@@ -109,11 +142,14 @@ describe("getDocumentUrl", () => {
       data: { asset_id: "TEST-DOC-001", comprador_id: null, storage_path: "assets/TEST-DOC-001/nota-simple.pdf" },
       error: null,
     });
-    const assigned = query({ data: [{ asset_id: "TEST-DOC-001" }], error: null });
     const bucket = storage({ signedUrl: "https://example.com/agente" });
     vi.doMock("@/lib/supabase/server", () => ({
       createServiceClient: vi.fn(async () => ({
-        from: (table: string) => (table === "vendedor_assets" ? assigned : docs),
+        from: (table: string) => {
+          if (table === "vendedor_assets") return idListQuery(["TEST-DOC-001"]);
+          if (table === "asset_nda_aceptaciones") return idListQuery(["TEST-DOC-001"]);
+          return docs;
+        },
         storage: bucket,
       })),
     }));
@@ -128,11 +164,14 @@ describe("getDocumentUrl", () => {
       data: { asset_id: "OTRO-ACTIVO", comprador_id: null, storage_path: "assets/OTRO-ACTIVO/secreto.pdf" },
       error: null,
     });
-    const none = query({ data: [], error: null });
     const blocked = storage({ signedUrl: "https://example.com/no" });
     vi.doMock("@/lib/supabase/server", () => ({
       createServiceClient: vi.fn(async () => ({
-        from: (table: string) => (table === "vendedor_assets" ? none : ajeno),
+        from: (table: string) => {
+          if (table === "vendedor_assets") return idListQuery([]);
+          if (table === "asset_nda_aceptaciones") return idListQuery(["OTRO-ACTIVO"]);
+          return ajeno;
+        },
         storage: blocked,
       })),
     }));
@@ -150,7 +189,7 @@ describe("getDocumentUrl", () => {
     const bucket = storage({ signedUrl: "https://example.com/comprador" });
     vi.doMock("@/lib/supabase/server", () => ({
       createServiceClient: vi.fn(async () => ({
-        from: () => propio,
+        from: (table: string) => (table === "asset_nda_aceptaciones" ? idListQuery(["TEST-DOC-001"]) : propio),
         storage: bucket,
       })),
     }));
@@ -166,7 +205,7 @@ describe("getDocumentUrl", () => {
     const blocked = storage({ signedUrl: "https://example.com/no" });
     vi.doMock("@/lib/supabase/server", () => ({
       createServiceClient: vi.fn(async () => ({
-        from: () => ajeno,
+        from: (table: string) => (table === "asset_nda_aceptaciones" ? idListQuery(["TEST-DOC-001"]) : ajeno),
         storage: blocked,
       })),
     }));
@@ -224,10 +263,13 @@ describe("fetchDocumentos", () => {
       },
     ];
     const docs = query({ data: rows, error: null });
-    const assigned = query({ data: [{ asset_id: "TEST-DOC-001" }], error: null });
     vi.doMock("@/lib/supabase/server", () => ({
       createServiceClient: vi.fn(async () => ({
-        from: (table: string) => (table === "vendedor_assets" ? assigned : docs),
+        from: (table: string) => {
+          if (table === "vendedor_assets") return idListQuery(["TEST-DOC-001"]);
+          if (table === "asset_nda_aceptaciones") return idListQuery(["TEST-DOC-001"]);
+          return docs;
+        },
         storage: storage({}),
       })),
     }));
@@ -239,16 +281,115 @@ describe("fetchDocumentos", () => {
   it("el agente sin asignación no lista documentos ajenos", async () => {
     getServerSession.mockResolvedValue(agenteSession);
     const docs = query({ data: [{ name: "secreto.pdf", asset_id: "OTRO", comprador_id: null }], error: null });
-    const none = query({ data: [], error: null });
     vi.doMock("@/lib/supabase/server", () => ({
       createServiceClient: vi.fn(async () => ({
-        from: (table: string) => (table === "vendedor_assets" ? none : docs),
+        from: (table: string) => {
+          if (table === "vendedor_assets") return idListQuery([]);
+          if (table === "asset_nda_aceptaciones") return idListQuery(["OTRO"]);
+          return docs;
+        },
         storage: storage({}),
       })),
     }));
     const { fetchDocumentos } = await import("@/app/actions/documentos");
     await expect(fetchDocumentos({ assetId: "OTRO" })).rejects.toThrow("Acceso denegado");
     expect(docs.order).not.toHaveBeenCalled();
+  });
+});
+
+describe("NDA del activo en servidor", () => {
+  const notaA = {
+    id: "a",
+    asset_id: "TEST-DOC-001",
+    comprador_id: null as string | null,
+    name: "nota-a.pdf",
+    storage_path: "assets/TEST-DOC-001/nota-a.pdf",
+    icon_type: "pdf",
+    size_bytes: 10,
+    uploaded_by: "Admin",
+    created_at: "2026-03-01T00:00:00.000Z",
+  };
+  const notaB = {
+    ...notaA,
+    id: "b",
+    asset_id: "ACTIVO-B",
+    name: "nota-b.pdf",
+    storage_path: "assets/ACTIVO-B/nota-b.pdf",
+  };
+
+  beforeEach(() => {
+    vi.resetModules();
+    getServerSession.mockReset();
+  });
+
+  function mockAgente(assigned: string[], nda: string[]) {
+    const docs = docsTable([notaA, notaB]);
+    const bucket = storage({ signedUrl: "https://example.com/signed" });
+    vi.doMock("@/lib/supabase/server", () => ({
+      createServiceClient: vi.fn(async () => ({
+        from: (table: string) => {
+          if (table === "vendedor_assets") return idListQuery(assigned);
+          if (table === "asset_nda_aceptaciones") return idListQuery(nda);
+          if (table === "documentos") return docs;
+          throw new Error(table);
+        },
+        storage: bucket,
+      })),
+    }));
+    return { docs, bucket };
+  }
+
+  it("sin NDA rechaza el listado y la URL firmada", async () => {
+    getServerSession.mockResolvedValue(agenteSession);
+    const { docs, bucket } = mockAgente(["TEST-DOC-001", "ACTIVO-B"], []);
+    const { fetchDocumentos, getDocumentUrl } = await import("@/app/actions/documentos");
+
+    await expect(fetchDocumentos({ assetId: "TEST-DOC-001" })).rejects.toThrow(NDA_NOT_ACCEPTED);
+    expect(docs.order).not.toHaveBeenCalled();
+    await expect(getDocumentUrl(notaA.storage_path)).rejects.toThrow(NDA_NOT_ACCEPTED);
+    expect(bucket.createSignedUrl).not.toHaveBeenCalled();
+  });
+
+  it("con el NDA del activo A abre A y no B", async () => {
+    getServerSession.mockResolvedValue(agenteSession);
+    const { bucket } = mockAgente(["TEST-DOC-001", "ACTIVO-B"], ["TEST-DOC-001"]);
+    const { fetchDocumentos, getDocumentUrl } = await import("@/app/actions/documentos");
+
+    const listA = await fetchDocumentos({ assetId: "TEST-DOC-001" });
+    expect(listA.map((doc) => doc.name)).toEqual(["nota-a.pdf"]);
+    await expect(getDocumentUrl(notaA.storage_path)).resolves.toBe("https://example.com/signed");
+    expect(bucket.createSignedUrl).toHaveBeenCalledWith(notaA.storage_path, 3600);
+
+    await expect(fetchDocumentos({ assetId: "ACTIVO-B" })).rejects.toThrow(NDA_NOT_ACCEPTED);
+    await expect(getDocumentUrl(notaB.storage_path)).rejects.toThrow(NDA_NOT_ACCEPTED);
+    expect(bucket.createSignedUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it("el admin lista y firma sin haber aceptado el NDA", async () => {
+    getServerSession.mockResolvedValue(adminSession);
+    const docs = query({
+      data: { asset_id: "ACTIVO-B", comprador_id: null, storage_path: notaB.storage_path },
+      error: null,
+    });
+    docs.order = vi.fn(async () => ({ data: [notaB], error: null }));
+    const bucket = storage({ signedUrl: "https://example.com/admin" });
+    vi.doMock("@/lib/supabase/server", () => ({
+      createServiceClient: vi.fn(async () => ({
+        from: (table: string) => {
+          if (table === "asset_nda_aceptaciones" || table === "vendedor_assets") {
+            throw new Error(`el admin no consulta ${table}`);
+          }
+          return docs;
+        },
+        storage: bucket,
+      })),
+    }));
+    const { fetchDocumentos, getDocumentUrl } = await import("@/app/actions/documentos");
+
+    const list = await fetchDocumentos({ assetId: "ACTIVO-B" });
+    expect(list.map((doc) => doc.name)).toEqual(["nota-b.pdf"]);
+    await expect(getDocumentUrl(notaB.storage_path)).resolves.toBe("https://example.com/admin");
+    expect(bucket.createSignedUrl).toHaveBeenCalledWith(notaB.storage_path, 3600);
   });
 });
 
