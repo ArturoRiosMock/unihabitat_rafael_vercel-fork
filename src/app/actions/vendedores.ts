@@ -2,7 +2,9 @@
 
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { rowToVendedor, vendedorToRow } from "@/lib/supabase/db";
-import { requireAdmin } from "@/lib/auth-server";
+import { getServerSession, requireAdmin } from "@/lib/auth-server";
+import { asignacionReiniciaPlazo, canReadComprador } from "@/lib/comprador-gestion";
+import { fetchAssignedVendedorId } from "@/lib/comprador-gestion-run";
 import { createNotificacion } from "@/app/actions/notificaciones";
 import { inviteAgenteByEmail } from "@/lib/auth/agente-invite";
 import type { Vendedor } from "@/lib/types";
@@ -322,15 +324,17 @@ export async function setCompradorAgente(
 ): Promise<void> {
   await requireAdmin();
   const sb = await createServiceClient();
+  const previous = await fetchAssignedVendedorId(sb, compradorId);
+  if (previous === vendedorId) return;
 
   // 1. Limpiamos asignaciones previas del comprador.
   await sb.from("vendedor_compradores").delete().eq("comprador_id", compradorId);
 
-  // 2. Si vendedorId es null estamos quitando el agente.
+  // 2. Si vendedorId es null el comprador vuelve a ser del gestor.
   if (!vendedorId) {
     await sb
       .from("compradores")
-      .update({ agente: "" })
+      .update({ agente: "Admin" })
       .eq("id", compradorId);
     return;
   }
@@ -350,10 +354,15 @@ export async function setCompradorAgente(
     .insert({ vendedor_id: vendedorId, comprador_id: compradorId });
   if (insErr) throw new Error(insErr.message);
 
-  await sb
+  const compradorPatch: Record<string, string> = { agente: agenteNombre };
+  if (asignacionReiniciaPlazo(previous, vendedorId)) {
+    compradorPatch.ultima_gestion_agente_at = new Date().toISOString();
+  }
+  const { error: updErr } = await sb
     .from("compradores")
-    .update({ agente: agenteNombre })
+    .update(compradorPatch)
     .eq("id", compradorId);
+  if (updErr) throw new Error(updErr.message);
 
   // 4. Notificación al agente.
   const { data: cRow } = await sb
@@ -416,16 +425,21 @@ export async function setAssetAgente(
 export async function getCompradorAgente(
   compradorId: string,
 ): Promise<string | null> {
+  const session = await getServerSession();
+  if (!session || (session.role !== "admin" && session.role !== "vendedor")) {
+    throw new Error("Acceso denegado");
+  }
   const sb = await createServiceClient();
-  const { data, error } = await sb
-    .from("vendedor_compradores")
-    .select("vendedor_id")
-    .eq("comprador_id", compradorId)
-    .order("assigned_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error) return null;
-  return (data?.vendedor_id as string | undefined) ?? null;
+  const assigned = await fetchAssignedVendedorId(sb, compradorId);
+  if (
+    !canReadComprador(
+      { role: session.role, vendedorId: session.vendedorId ?? null },
+      assigned,
+    )
+  ) {
+    throw new Error("Solo el agente asignado puede ver este comprador");
+  }
+  return assigned;
 }
 
 export async function getAssetAgente(

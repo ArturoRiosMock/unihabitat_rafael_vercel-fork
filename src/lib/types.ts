@@ -142,6 +142,15 @@ export interface Comprador {
   nda: "Firmada" | "Pendiente";
   /** Portal privado: sin_acceso hasta activación manual admin. */
   acceso: CompradorAcceso;
+  /**
+   * Última gestión del agente asignado (ISO). Null si la columna aún no existe.
+   * El admin no reinicia este reloj.
+   */
+  ultimaGestionAgenteAt?: string | null;
+  /** Momento en que pasó al gestor por 90 días sin gestión. */
+  reasignadoInactividadAt?: string | null;
+  /** `vendedor_compradores.vendedor_id`. Null si el comprador es del gestor. */
+  agenteId?: string | null;
 }
 
 export interface Vendedor {

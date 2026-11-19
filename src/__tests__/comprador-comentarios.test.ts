@@ -116,6 +116,7 @@ describe("fetch y alta aplican la regla en el servidor", () => {
     rows?: Array<Record<string, unknown>>;
   }) {
     const insert = vi.fn(async () => ({ error: null }));
+    const touch = vi.fn(async () => ({ error: null }));
     const from = vi.fn((table: string) => {
       if (table === "vendedor_compradores") {
         return {
@@ -133,6 +134,13 @@ describe("fetch y alta aplican la regla en el servidor", () => {
           }),
         };
       }
+      if (table === "compradores") {
+        return {
+          update: () => ({
+            eq: touch,
+          }),
+        };
+      }
       if (table === "comprador_comentarios") {
         return {
           select: () => ({
@@ -145,7 +153,7 @@ describe("fetch y alta aplican la regla en el servidor", () => {
       }
       throw new Error(`tabla inesperada ${table}`);
     });
-    return { client: { from }, insert };
+    return { client: { from }, insert, touch };
   }
 
   it("el admin recibe el comentario como Gestor, el más reciente ya ordenado", async () => {
@@ -207,6 +215,7 @@ describe("fetch y alta aplican la regla en el servidor", () => {
       author_role: "vendedor",
       text: "Segunda llamada",
     });
+    expect(sb.touch).toHaveBeenCalled();
   });
 });
 

@@ -35,6 +35,7 @@ import {
   fetchCompradorComentarios,
 } from "@/app/actions/comprador-comentarios";
 import { CommentByline } from "@/components/CommentByline";
+import { GestionPlazo } from "@/components/GestionPlazo";
 import type { CompradorComentario } from "@/lib/comprador-comentarios";
 import { fmt } from "@/lib/utils";
 import { toast } from "@/lib/toast";
@@ -48,7 +49,8 @@ const tabs = [
 export default function CompradorDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { getComprador, refreshCompradores } = useApp();
+  const { getComprador, refreshCompradores, session } = useApp();
+  const isAgente = session?.role === "vendedor";
   const c = getComprador(id);
   const [tab, setTab] = useState(0);
   const [deleting, setDeleting] = useState(false);
@@ -92,15 +94,17 @@ export default function CompradorDetailPage({ params }: { params: Promise<{ id: 
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void handleDelete()}
-            disabled={deleting}
-            className="flex items-center gap-1.5 rounded-lg border border-red/30 px-3.5 py-2 text-xs font-medium text-red hover:bg-red/5 disabled:opacity-50"
-          >
-            {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-            Eliminar
-          </button>
+          {isAgente ? null : (
+            <button
+              type="button"
+              onClick={() => void handleDelete()}
+              disabled={deleting}
+              className="flex items-center gap-1.5 rounded-lg border border-red/30 px-3.5 py-2 text-xs font-medium text-red hover:bg-red/5 disabled:opacity-50"
+            >
+              {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              Eliminar
+            </button>
+          )}
           <Link href="/admin/compradores" className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3.5 py-2 text-xs font-medium text-navy hover:bg-cream"><ArrowLeft size={14} /> Volver</Link>
         </div>
       </div>
@@ -118,7 +122,7 @@ export default function CompradorDetailPage({ params }: { params: Promise<{ id: 
           })}
         </div>
         <div className="flex-1 overflow-y-auto bg-cream p-6">
-          {tab === 0 && <TabDatos c={c} />}
+          {tab === 0 && <TabDatos c={c} isAgente={isAgente} />}
           {tab === 1 && <TabDocs />}
           {tab === 2 && <TabConversacion />}
         </div>
@@ -145,7 +149,147 @@ function DataPill({ label, value }: { label: string; value: string }) {
   );
 }
 
-function TabDatos({ c }: { c: Comprador }) {
+const FICHA_ESTADOS = ["Nuevo", "Seguimiento", "Negociación", "Contactado", "Oferta enviada", "Cerrado"];
+
+function FichaCompradorCard({ c }: { c: Comprador }) {
+  const { refreshCompradores } = useApp();
+  const [nombre, setNombre] = useState(c.nombre);
+  const [email, setEmail] = useState(c.email);
+  const [tel, setTel] = useState(c.tel);
+  const [tipo, setTipo] = useState<"Privado" | "Free">(c.tipo);
+  const [estado, setEstado] = useState(c.estado);
+  const [intereses, setIntereses] = useState(c.intereses);
+  const [presupuesto, setPresupuesto] = useState(c.presupuesto);
+  const [nda, setNda] = useState<"Firmada" | "Pendiente">(c.nda);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setNombre(c.nombre);
+    setEmail(c.email);
+    setTel(c.tel);
+    setTipo(c.tipo);
+    setEstado(c.estado);
+    setIntereses(c.intereses);
+    setPresupuesto(c.presupuesto);
+    setNda(c.nda);
+  }, [c]);
+
+  async function save() {
+    setSaving(true);
+    try {
+      await updateCompradorFields(c.id, {
+        nombre,
+        email,
+        tel,
+        tipo,
+        estado,
+        intereses,
+        presupuesto,
+        nda,
+      });
+      await refreshCompradores();
+      toast.success("Ficha actualizada");
+    } catch (err) {
+      toast.error("No se pudo guardar la ficha", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <SectionCard title="Ficha">
+      <div className="grid grid-cols-2 gap-3">
+        <FichaField label="Nombre" value={nombre} onChange={setNombre} />
+        <FichaField label="Email" value={email} onChange={setEmail} type="email" />
+        <FichaField label="Teléfono" value={tel} onChange={setTel} />
+        <FichaField label="Presupuesto" value={presupuesto} onChange={setPresupuesto} />
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted">Tipo</label>
+          <select
+            value={tipo}
+            onChange={(e) => setTipo(e.target.value as "Privado" | "Free")}
+            className="rounded-md border border-border bg-cream2 px-2.5 py-2 text-sm outline-none focus:border-navy"
+          >
+            <option value="Privado">Privado</option>
+            <option value="Free">Free</option>
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted">Estado</label>
+          <select
+            value={estado}
+            onChange={(e) => setEstado(e.target.value)}
+            className="rounded-md border border-border bg-cream2 px-2.5 py-2 text-sm outline-none focus:border-navy"
+          >
+            {estado && !FICHA_ESTADOS.includes(estado) ? <option value={estado}>{estado}</option> : null}
+            {FICHA_ESTADOS.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted">NDA</label>
+          <select
+            value={nda}
+            onChange={(e) => setNda(e.target.value as "Firmada" | "Pendiente")}
+            className="rounded-md border border-border bg-cream2 px-2.5 py-2 text-sm outline-none focus:border-navy"
+          >
+            <option value="Pendiente">Pendiente</option>
+            <option value="Firmada">Firmada</option>
+          </select>
+        </div>
+        <div className="col-span-2 flex flex-col gap-1">
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted">Intereses</label>
+          <textarea
+            value={intereses}
+            onChange={(e) => setIntereses(e.target.value)}
+            rows={2}
+            className="rounded-md border border-border bg-cream2 px-2.5 py-2 text-sm outline-none focus:border-navy"
+          />
+        </div>
+      </div>
+      <div className="mt-3 flex justify-end">
+        <button
+          type="button"
+          disabled={saving}
+          onClick={() => void save()}
+          className="flex items-center gap-1.5 rounded-md bg-gold px-3 py-1.5 text-xs font-medium text-white hover:bg-gold2 disabled:opacity-50"
+        >
+          {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+          Guardar ficha
+        </button>
+      </div>
+    </SectionCard>
+  );
+}
+
+function FichaField({
+  label,
+  value,
+  onChange,
+  type = "text",
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-[10px] font-semibold uppercase tracking-wider text-muted">{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="rounded-md border border-border bg-cream2 px-2.5 py-2 text-sm outline-none focus:border-navy focus:bg-white"
+      />
+    </div>
+  );
+}
+
+function TabDatos({ c, isAgente }: { c: Comprador; isAgente: boolean }) {
   return (
     <>
       <div className="mb-4 rounded-lg bg-gradient-to-br from-navy to-navy3 p-4">
@@ -159,21 +303,27 @@ function TabDatos({ c }: { c: Comprador }) {
         </div>
       </div>
 
-      <div className="mb-4">
-        <AccesoYNdaCard c={c} />
-      </div>
+      <GestionPlazo
+        ultimaGestionAgenteAt={c.ultimaGestionAgenteAt}
+        assigned={Boolean(c.agenteId)}
+        verbose
+      />
 
-      <div className="mb-4"><SectionCard title="Información de Contacto">
-        <div className="grid grid-cols-3 gap-2">
-          <DataPill label="Teléfono" value={c.tel || "—"} />
-          <DataPill label="Email" value={c.email} />
-          <DataPill label="Agente (legacy)" value={c.agente || "—"} />
+      {isAgente ? null : (
+        <div className="mb-4">
+          <AccesoYNdaCard c={c} />
         </div>
-      </SectionCard></div>
+      )}
 
       <div className="mb-4">
-        <AgenteAssignmentCard compradorId={c.id} />
+        <FichaCompradorCard c={c} />
       </div>
+
+      {isAgente ? null : (
+        <div className="mb-4">
+          <AgenteAssignmentCard compradorId={c.id} />
+        </div>
+      )}
 
       <div className="mb-4">
         <ActividadCompradorCard compradorId={c.id} />
@@ -412,6 +562,7 @@ function isActividadDenied(message: string): boolean {
 }
 
 function ActividadCompradorCard({ compradorId }: { compradorId: string }) {
+  const { refreshCompradores } = useApp();
   const [rows, setRows] = useState<CompradorComentario[]>([]);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
@@ -451,6 +602,7 @@ function ActividadCompradorCard({ compradorId }: { compradorId: string }) {
       setText("");
       toast.success("Comentario guardado");
       setReloadKey((current) => current + 1);
+      void refreshCompradores();
     } catch (err) {
       toast.error("No se pudo guardar el comentario", {
         description: err instanceof Error ? err.message : String(err),

@@ -3,27 +3,99 @@
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { rowToComprador, compradorToRow } from "@/lib/supabase/db";
 import type { Comprador, CompradorAcceso } from "@/lib/types";
-import { requireAdmin } from "@/lib/auth-server";
+import { getServerSession, requireAdmin, requireAdminOrVendor } from "@/lib/auth-server";
+import type { UserSession } from "@/lib/permissions";
+import {
+  canReadComprador,
+  planCompradorCreate,
+  planCompradorUpdate,
+  type CompradorActor,
+  type CompradorFieldInput,
+} from "@/lib/comprador-gestion";
+import {
+  fetchAssignedVendedorId,
+  runReasignacionInactividad,
+} from "@/lib/comprador-gestion-run";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
-export async function fetchCompradores(): Promise<Comprador[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("compradores")
-    .select("*")
-    .order("created_at", { ascending: false });
+function actorOf(session: UserSession): CompradorActor {
+  return { role: session.role, vendedorId: session.vendedorId ?? null };
+}
+
+async function assignmentMap(
+  sb: SupabaseClient,
+  ids: string[],
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (ids.length === 0) return map;
+  const { data, error } = await sb
+    .from("vendedor_compradores")
+    .select("comprador_id, vendedor_id, assigned_at")
+    .in("comprador_id", ids)
+    .order("assigned_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return (data ?? []).map(rowToComprador);
+  for (const row of data ?? []) {
+    const compradorId = row.comprador_id as string;
+    if (!map.has(compradorId)) map.set(compradorId, row.vendedor_id as string);
+  }
+  return map;
+}
+
+function presentComprador(row: Record<string, unknown>, agenteId: string | null): Comprador {
+  return { ...rowToComprador(row), agenteId };
+}
+
+async function reassignQuietly(sb: SupabaseClient): Promise<void> {
+  try {
+    await runReasignacionInactividad(sb);
+  } catch (err) {
+    console.error("[compradores] reasignación de inactividad omitida:", err);
+  }
+}
+
+/**
+ * Admin: todos los compradores. Agente: solo los que tiene asignados.
+ * Antes de leer, aplica la regla de 90 días (además del cron).
+ * Cliente y anónimo reciben lista vacía: esta ficha no es del portal.
+ */
+export async function fetchCompradores(): Promise<Comprador[]> {
+  const session = await getServerSession();
+  if (!session || (session.role !== "admin" && session.role !== "vendedor")) return [];
+  if (session.role === "vendedor" && !session.vendedorId) return [];
+
+  const sb = await createServiceClient();
+  await reassignQuietly(sb);
+
+  let query = sb.from("compradores").select("*").order("created_at", { ascending: false });
+  if (session.role === "vendedor") {
+    const { data: links, error: linkErr } = await sb
+      .from("vendedor_compradores")
+      .select("comprador_id")
+      .eq("vendedor_id", session.vendedorId);
+    if (linkErr) throw new Error(linkErr.message);
+    const ids = (links ?? []).map((row) => row.comprador_id as string);
+    if (ids.length === 0) return [];
+    query = sb.from("compradores").select("*").in("id", ids).order("created_at", { ascending: false });
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  const rows = data ?? [];
+  const agents = await assignmentMap(sb, rows.map((row) => row.id as string));
+  return rows.map((row) => presentComprador(row, agents.get(row.id as string) ?? null));
 }
 
 export async function fetchCompradorById(id: string): Promise<Comprador | null> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("compradores")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
+  const session = await getServerSession();
+  if (!session || (session.role !== "admin" && session.role !== "vendedor")) return null;
+
+  const sb = await createServiceClient();
+  const assigned = await fetchAssignedVendedorId(sb, id);
+  if (!canReadComprador(actorOf(session), assigned)) return null;
+
+  const { data, error } = await sb.from("compradores").select("*").eq("id", id).maybeSingle();
   if (error) throw new Error(error.message);
-  return data ? rowToComprador(data) : null;
+  return data ? presentComprador(data, assigned) : null;
 }
 
 export async function fetchCompradorByEmail(email: string): Promise<Comprador | null> {
@@ -128,30 +200,37 @@ export async function createComprador(input: {
   agente?: string;
   acceso?: CompradorAcceso;
 }): Promise<Comprador> {
-  await requireAdmin();
-  const nombre = input.nombre.trim();
-  const email = input.email.trim().toLowerCase();
-  if (!nombre || !email) throw new Error("Nombre y email son obligatorios");
+  const session = await requireAdminOrVendor();
+  const plan = planCompradorCreate(actorOf(session), input, session.nombre);
+  if (!plan.ok) throw new Error(plan.error);
 
-  const existing = await fetchCompradorByEmail(email);
+  const sb = await createServiceClient();
+  const { data: existing, error: existingErr } = await sb
+    .from("compradores")
+    .select("id")
+    .ilike("email", plan.email)
+    .limit(1)
+    .maybeSingle();
+  if (existingErr) throw new Error(existingErr.message);
   if (existing) throw new Error("Ya existe un comprador con ese email");
 
-  const initials = nombre
+  const initials = plan.nombre
     .split(/\s+/)
     .filter(Boolean)
     .map((w) => w[0])
     .join("")
     .toUpperCase()
     .slice(0, 2) || "??";
+  const now = new Date().toISOString();
 
   const c: Comprador = {
     id: crypto.randomUUID(),
-    nombre,
+    nombre: plan.nombre,
     ini: initials,
     col: "#2563a8,#0d2a4a",
     tipo: input.tipo ?? "Privado",
-    agente: input.agente?.trim() || "Admin",
-    email,
+    agente: plan.agenteNombre,
+    email: plan.email,
     tel: input.tel?.trim() || "",
     intereses: "",
     presupuesto: "",
@@ -160,33 +239,42 @@ export async function createComprador(input: {
     estado: "Nuevo",
     estadoC: "fp-nd",
     nda: "Pendiente",
-    acceso: input.acceso ?? "sin_acceso",
+    acceso: plan.acceso,
+    ultimaGestionAgenteAt: plan.renewsGestion ? now : null,
+    agenteId: plan.assignVendedorId,
   };
-  const sb = await createServiceClient();
-  const { error } = await sb.from("compradores").upsert(compradorToRow(c), { onConflict: "id" });
+  const { error } = await sb.from("compradores").insert({
+    ...compradorToRow(c),
+    ...(plan.renewsGestion ? { ultima_gestion_agente_at: now } : {}),
+  });
   if (error) throw new Error(error.message);
+
+  if (plan.assignVendedorId) {
+    const { error: linkErr } = await sb.from("vendedor_compradores").insert({
+      vendedor_id: plan.assignVendedorId,
+      comprador_id: c.id,
+    });
+    if (linkErr) throw new Error(linkErr.message);
+  }
   return c;
 }
 
 export async function updateCompradorFields(
   id: string,
-  fields: Partial<Pick<Comprador, "nombre" | "email" | "tel" | "tipo" | "agente" | "estado" | "intereses" | "presupuesto" | "nda" | "acceso">>,
+  fields: CompradorFieldInput,
 ): Promise<void> {
-  await requireAdmin();
+  const session = await requireAdminOrVendor();
   if (!id || Object.keys(fields).length === 0) return;
-  const patch: Record<string, string> = {};
-  if (fields.nombre != null) patch.nombre = fields.nombre.trim();
-  if (fields.email != null) patch.email = fields.email.trim().toLowerCase();
-  if (fields.tel != null) patch.tel = fields.tel.trim();
-  if (fields.tipo != null) patch.tipo = fields.tipo;
-  if (fields.agente != null) patch.agente = fields.agente.trim();
-  if (fields.estado != null) patch.estado = fields.estado.trim();
-  if (fields.intereses != null) patch.intereses = fields.intereses;
-  if (fields.presupuesto != null) patch.presupuesto = fields.presupuesto;
-  if (fields.nda != null) patch.nda = fields.nda;
-  if (fields.acceso != null) patch.acceso = fields.acceso;
+
   const sb = await createServiceClient();
-  const { error } = await sb.from("compradores").update(patch).eq("id", id);
+  const assigned = await fetchAssignedVendedorId(sb, id);
+  const plan = planCompradorUpdate(actorOf(session), assigned, fields);
+  if (!plan.ok) throw new Error(plan.error);
+  if (Object.keys(plan.patch).length === 0) return;
+
+  const row: Record<string, string> = { ...plan.patch };
+  if (plan.renewsGestion) row.ultima_gestion_agente_at = new Date().toISOString();
+  const { error } = await sb.from("compradores").update(row).eq("id", id);
   if (error) throw new Error(error.message);
 }
 

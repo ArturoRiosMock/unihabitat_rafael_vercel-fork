@@ -266,11 +266,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // at the asset-detail tab level (Agentes / Clientes / Administrador).
   const filteredAssets = state.assets;
 
-  const filteredCompradores = session?.role === "vendedor" && assignedCompradorIds.length > 0
-    ? state.compradores.filter((c) => assignedCompradorIds.includes(c.id))
-    : session?.role === "vendedor"
-      ? []
-      : state.compradores;
+  // `fetchCompradores` ya devuelve solo los compradores del agente. No se
+  // vuelve a filtrar aquí: la lista de ids llega en otra petición y, si aún
+  // está vacía, ocultaría un alta recién hecha.
+  const filteredCompradores = state.compradores;
 
   const filteredTareas = session?.role === "vendedor"
     ? state.tareas.filter((t) => t.agente === session.nombre)

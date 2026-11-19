@@ -7,6 +7,8 @@ import {
   planCompradorComentarioInsert,
   type CompradorComentario,
 } from "@/lib/comprador-comentarios";
+import { eventoRenuevaGestion } from "@/lib/comprador-gestion";
+import { touchUltimaGestionAgente } from "@/lib/comprador-gestion-run";
 import { createServiceClient } from "@/lib/supabase/server";
 
 interface ComentarioStored {
@@ -101,4 +103,14 @@ export async function createCompradorComentario(compradorId: string, text: strin
   const supabase = await createServiceClient();
   const { error } = await supabase.from("comprador_comentarios").insert(plan.row);
   if (error) throw new Error(error.message);
+
+  if (
+    eventoRenuevaGestion({
+      evento: "comentario",
+      actor: { role: session.role, vendedorId: session.vendedorId ?? null },
+      assignedVendedorId: assigned,
+    })
+  ) {
+    await touchUltimaGestionAgente(supabase, id);
+  }
 }

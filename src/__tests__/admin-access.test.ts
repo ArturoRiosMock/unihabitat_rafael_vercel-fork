@@ -38,13 +38,26 @@ describe("el agente no sale de la ficha mientras cargan los permisos", () => {
     expect(isAdminSectionAllowed(input)).toBe(true);
   });
 
+  it("entra en compradores aunque el ACL diga que no", () => {
+    const input = {
+      ...base,
+      permissions: defaultVendorPermissions().map((perm) =>
+        perm.section === "compradores" ? { ...perm, canView: false, canEdit: false } : perm,
+      ),
+      currentSection: hrefToSection("/admin/compradores"),
+    };
+    expect(input.currentSection).toBe("compradores");
+    expect(shouldRedirectVendorToActivos(input)).toBe(false);
+    expect(isAdminSectionAllowed(input)).toBe(true);
+  });
+
   it("sigue redirigiendo una sección que el agente no puede ver", () => {
     const input = {
       ...base,
       permissions: defaultVendorPermissions(),
-      currentSection: hrefToSection("/admin/compradores"),
+      currentSection: hrefToSection("/admin/agentes"),
     };
-    expect(input.currentSection).toBe("compradores");
+    expect(input.currentSection).toBe("agentes");
     expect(shouldRedirectVendorToActivos(input)).toBe(true);
     expect(isAdminSectionAllowed(input)).toBe(false);
   });

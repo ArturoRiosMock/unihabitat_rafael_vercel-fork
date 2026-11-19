@@ -11,12 +11,19 @@ describe("canViewSection — agente con sesión Supabase", () => {
     vendedorId: "v-1",
   };
 
-  it("solo ve Activos con permisos por defecto", () => {
+  it("ve Activos y Compradores; el resto sigue cerrado", () => {
     const perms = defaultVendorPermissions();
     expect(canViewSection(vendedorSession, "activos", perms)).toBe(true);
-    expect(canViewSection(vendedorSession, "compradores", perms)).toBe(false);
+    expect(canViewSection(vendedorSession, "compradores", perms)).toBe(true);
     expect(canViewSection(vendedorSession, "agentes", perms)).toBe(false);
     expect(canViewSection(vendedorSession, "config", perms)).toBe(false);
+  });
+
+  it("entra en Compradores aunque el ACL guardado lo oculte", () => {
+    const perms = defaultVendorPermissions().map((perm) =>
+      perm.section === "compradores" ? { ...perm, canView: false, canEdit: false } : perm,
+    );
+    expect(canViewSection(vendedorSession, "compradores", perms)).toBe(true);
   });
 
   it("no trata sesión nula como admin (bug sidebar)", () => {

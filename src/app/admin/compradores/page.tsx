@@ -5,6 +5,8 @@ import { useApp } from "@/lib/context";
 import Link from "next/link";
 import { Search, X, Plus, ChevronRight, Loader2, AlertCircle } from "lucide-react";
 import { createComprador } from "@/app/actions/compradores";
+import { GestionPlazo } from "@/components/GestionPlazo";
+import { plazoGestion } from "@/lib/comprador-gestion";
 import { toast } from "@/lib/toast";
 
 const pillClass: Record<string, string> = {
@@ -24,24 +26,30 @@ const ESTADO_OPTIONS = [
   "Cerrado",
 ];
 
+function agenteVisible(nombre: string, agenteId: string | null | undefined): string {
+  if (!agenteId) return "Gestor";
+  return nombre.trim() || "Agente";
+}
+
 const NEGOCIACION_ESTADOS = new Set(["Negociación", "Oferta enviada"]);
 const CERRADO_ESTADOS = new Set(["Cerrado", "Cerrada", "Ganada", "Operación cerrada"]);
 
 export default function CompradoresPage() {
-  const { compradores, compradoresLoading, compradoresError, refreshCompradores } = useApp();
+  const { compradores, compradoresLoading, compradoresError, refreshCompradores, session } = useApp();
+  const isAgente = session?.role === "vendedor";
   const [q, setQ] = useState("");
   const [fTipo, setFTipo] = useState("");
   const [fEstado, setFEstado] = useState("");
   const [fAgente, setFAgente] = useState("");
   const [fNda, setFNda] = useState("");
   const [fAcceso, setFAcceso] = useState("");
+  const [fGestion, setFGestion] = useState("");
   const [showCreate, setShowCreate] = useState(false);
 
   const agenteOptions = useMemo(() => {
     const set = new Set<string>();
     for (const c of compradores) {
-      const a = c.agente?.trim();
-      if (a) set.add(a);
+      set.add(agenteVisible(c.agente, c.agenteId));
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b, "es"));
   }, [compradores]);
@@ -65,9 +73,14 @@ export default function CompradoresPage() {
     return compradores.filter((p) => {
       if (fTipo && p.tipo !== fTipo) return false;
       if (fEstado && p.estado !== fEstado) return false;
-      if (fAgente && p.agente !== fAgente) return false;
+      if (fAgente && agenteVisible(p.agente, p.agenteId) !== fAgente) return false;
       if (fNda && p.nda !== fNda) return false;
       if (fAcceso && p.acceso !== fAcceso) return false;
+      if (fGestion === "sin_agente" && p.agenteId) return false;
+      if (fGestion === "por_vencer") {
+        const plazo = plazoGestion(p.ultimaGestionAgenteAt, Boolean(p.agenteId));
+        if (!plazo.warning) return false;
+      }
       if (q) {
         const blob = [p.nombre, p.email, p.tel, p.agente, p.estado, p.intereses]
           .join(" ")
@@ -76,7 +89,7 @@ export default function CompradoresPage() {
       }
       return true;
     });
-  }, [compradores, q, fTipo, fEstado, fAgente, fNda, fAcceso]);
+  }, [compradores, q, fTipo, fEstado, fAgente, fNda, fAcceso, fGestion]);
 
   const clearFilters = () => {
     setQ("");
@@ -85,6 +98,7 @@ export default function CompradoresPage() {
     setFAgente("");
     setFNda("");
     setFAcceso("");
+    setFGestion("");
   };
 
   return (
@@ -102,7 +116,9 @@ export default function CompradoresPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <span className="rounded-md bg-gold/10 px-2.5 py-1 text-xs font-medium text-gold">Admin</span>
+          <span className="rounded-md bg-gold/10 px-2.5 py-1 text-xs font-medium text-gold">
+            {isAgente ? "Agente" : "Admin"}
+          </span>
           <button
             type="button"
             onClick={() => setShowCreate(true)}
@@ -114,7 +130,11 @@ export default function CompradoresPage() {
       </div>
 
       <div className="p-5">
-        <p className="mb-3 text-xs text-muted">Clientes interesados en adquirir activos</p>
+        <p className="mb-3 text-xs text-muted">
+          {isAgente
+            ? "Solo los compradores que gestionas. Si pasan 90 días sin tu gestión, pasan a ser propiedad del gestor."
+            : "Clientes interesados en adquirir activos. El agente asignado tiene 90 días para gestionarlos."}
+        </p>
 
         {compradoresError && (
           <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-red/30 bg-red/5 p-3 text-sm text-red">
@@ -164,6 +184,13 @@ export default function CompradoresPage() {
               options={["activo", "sin_acceso"]}
               optionLabels={{ activo: "Activo", sin_acceso: "Sin acceso" }}
             />
+            <FSelect
+              label="Gestión"
+              value={fGestion}
+              onChange={setFGestion}
+              options={["por_vencer", "sin_agente"]}
+              optionLabels={{ por_vencer: "Menos de 15 días", sin_agente: "Propiedad del gestor" }}
+            />
             <div className="h-8 w-px self-end bg-border2" />
             <button
               type="button"
@@ -182,8 +209,8 @@ export default function CompradoresPage() {
         </p>
 
         <div className="overflow-hidden rounded-lg border border-border bg-white shadow-sm">
-          <div className="grid grid-cols-[2fr_72px_88px_120px_100px_100px_72px_28px] items-center gap-2 bg-navy px-3.5 py-2.5">
-            {["Cliente", "Tipo", "Acceso", "Agente", "Presupuesto", "Estado", "NDA", ""].map((h, i) => (
+          <div className="grid grid-cols-[minmax(0,2fr)_64px_80px_110px_120px_90px_100px_72px_28px] items-center gap-2 bg-navy px-3.5 py-2.5">
+            {["Cliente", "Tipo", "Acceso", "Agente", "Gestión", "Presupuesto", "Estado", "NDA", ""].map((h, i) => (
               <div key={`${h}-${i}`} className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
                 {h}
               </div>
@@ -207,8 +234,7 @@ export default function CompradoresPage() {
               <Link
                 key={p.id}
                 href={`/admin/compradores/${p.id}`}
-                className="grid grid-cols-[2fr_72px_88px_120px_100px_100px_72px_28px] items-center gap-2 border-b border-border2 px-3.5 transition-colors last:border-b-0 hover:bg-cream/50"
-                style={{ height: 48 }}
+                className="grid grid-cols-[minmax(0,2fr)_64px_80px_110px_120px_90px_100px_72px_28px] items-center gap-2 border-b border-border2 px-3.5 py-2 transition-colors last:border-b-0 hover:bg-cream/50"
               >
                 <div className="flex items-center gap-2 overflow-hidden">
                   <div
@@ -234,7 +260,8 @@ export default function CompradoresPage() {
                 >
                   {p.acceso === "activo" ? "Activo" : "Sin acceso"}
                 </span>
-                <span className="truncate text-xs">{p.agente || "—"}</span>
+                <span className="truncate text-xs">{agenteVisible(p.agente, p.agenteId)}</span>
+                <GestionPlazo ultimaGestionAgenteAt={p.ultimaGestionAgenteAt} assigned={Boolean(p.agenteId)} />
                 <span className="text-xs font-semibold text-navy">{p.presupuesto || "—"}</span>
                 <span className={`inline-flex w-fit rounded-md px-2 py-0.5 text-[10px] font-semibold ${pillClass[p.estadoC] || ""}`}>
                   {p.estado || "—"}
@@ -253,6 +280,7 @@ export default function CompradoresPage() {
 
       {showCreate && (
         <NuevoCompradorModal
+          isAgente={isAgente}
           onClose={() => setShowCreate(false)}
           onCreated={async () => {
             setShowCreate(false);
@@ -265,9 +293,11 @@ export default function CompradoresPage() {
 }
 
 function NuevoCompradorModal({
+  isAgente,
   onClose,
   onCreated,
 }: {
+  isAgente: boolean;
   onClose: () => void;
   onCreated: () => Promise<void>;
 }) {
@@ -282,11 +312,19 @@ function NuevoCompradorModal({
     e.preventDefault();
     setSaving(true);
     try {
-      await createComprador({ nombre, email, tel, tipo, acceso });
+      await createComprador({
+        nombre,
+        email,
+        tel,
+        tipo,
+        acceso: isAgente ? "sin_acceso" : acceso,
+      });
       toast.success("Comprador creado", {
-        description: acceso === "sin_acceso"
-          ? "Queda sin acceso al portal hasta que lo actives."
-          : "Tiene acceso activo al área privada.",
+        description: isAgente
+          ? "Queda asignado a ti, sin acceso al portal hasta que el gestor lo active."
+          : acceso === "sin_acceso"
+            ? "Queda sin acceso al portal hasta que lo actives."
+            : "Tiene acceso activo al área privada.",
       });
       await onCreated();
     } catch (err) {
@@ -307,13 +345,15 @@ function NuevoCompradorModal({
       >
         <h2 className="mb-1 text-base font-semibold text-navy">Nuevo comprador</h2>
         <p className="mb-4 text-xs text-muted">
-          Por defecto queda sin acceso al portal privado hasta activación manual.
+          {isAgente
+            ? "Queda asignado a ti. El acceso al portal lo activa el gestor."
+            : "Por defecto queda sin acceso al portal privado hasta activación manual."}
         </p>
         <div className="flex flex-col gap-3">
           <Field label="Nombre *" value={nombre} onChange={setNombre} required />
           <Field label="Email *" value={email} onChange={setEmail} type="email" required />
           <Field label="Teléfono" value={tel} onChange={setTel} />
-          <div className="grid grid-cols-2 gap-3">
+          <div className={isAgente ? "" : "grid grid-cols-2 gap-3"}>
             <div className="flex flex-col gap-1">
               <label className="text-[10px] font-semibold uppercase tracking-wider text-muted">Tipo</label>
               <select
@@ -325,17 +365,19 @@ function NuevoCompradorModal({
                 <option value="Free">Free</option>
               </select>
             </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-semibold uppercase tracking-wider text-muted">Acceso portal</label>
-              <select
-                value={acceso}
-                onChange={(e) => setAcceso(e.target.value as "sin_acceso" | "activo")}
-                className="rounded-md border border-border bg-cream2 px-2.5 py-2 text-sm outline-none focus:border-navy"
-              >
-                <option value="sin_acceso">Sin acceso</option>
-                <option value="activo">Activo</option>
-              </select>
-            </div>
+            {isAgente ? null : (
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-muted">Acceso portal</label>
+                <select
+                  value={acceso}
+                  onChange={(e) => setAcceso(e.target.value as "sin_acceso" | "activo")}
+                  className="rounded-md border border-border bg-cream2 px-2.5 py-2 text-sm outline-none focus:border-navy"
+                >
+                  <option value="sin_acceso">Sin acceso</option>
+                  <option value="activo">Activo</option>
+                </select>
+              </div>
+            )}
           </div>
         </div>
         <div className="mt-5 flex justify-end gap-2">

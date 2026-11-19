@@ -34,6 +34,12 @@ Sem estas três, a app não liga à base de dados.
 
 Sem `RESEND_API_KEY`, `sendEmail()` devolve `ok: false` com mensagem clara.
 
+## Cron — compradores sin gestión (opcional en local, obligatorio en Vercel)
+
+| Variável | Default | Descrição |
+|----------|---------|-----------|
+| `CRON_SECRET` | — | Segredo da rota `GET /api/cron/reasignar-compradores`. A Vercel envia `Authorization: Bearer <CRON_SECRET>`. Sem o valor, a rota responde 401. O cron está em `vercel.json` (todos os dias às 04:15 UTC). O listado de compradores também corre a mesma função ao abrir. |
+
 ## URLs públicas
 
 | Variável | Descrição |

@@ -6,6 +6,8 @@ import { EMAIL_SUPPORT } from "@/lib/email/resend";
 import { offerTemplate } from "@/lib/email/templates";
 import { getServerSession, requireAdminOrVendor } from "@/lib/auth-server";
 import { displayCommentAuthor } from "@/lib/comment-author";
+import { canReadComprador, eventoRenuevaGestion } from "@/lib/comprador-gestion";
+import { fetchAssignedVendedorId, touchUltimaGestionAgente } from "@/lib/comprador-gestion-run";
 import { fetchCompradorByEmail } from "@/app/actions/compradores";
 import type { UserSession } from "@/lib/permissions";
 
@@ -220,6 +222,21 @@ export async function createOfertaAdmin(params: {
     if (!vendRow) {
       throw new Error("La fila vendedores del agente no existe en la base de datos. Contacte al administrador.");
     }
+    const requested = params.compradorId?.trim() || "";
+    if (requested) {
+      const assigned = await fetchAssignedVendedorId(supabase, requested);
+      if (
+        !eventoRenuevaGestion({
+          evento: "oferta",
+          actor: { role: "vendedor", vendedorId },
+          assignedVendedorId: assigned,
+          compradorId: requested,
+        })
+      ) {
+        throw new Error("Solo puedes registrar ofertas de compradores que gestionas");
+      }
+      compradorId = requested;
+    }
   } else {
     compradorId = params.compradorId?.trim() || null;
     if (!compradorId) throw new Error("Selecciona un comprador");
@@ -249,6 +266,17 @@ export async function createOfertaAdmin(params: {
   if (error) throw new Error(error.message);
 
   const oferta = presentOferta(data as OfertaRow);
+  if (
+    oferta.comprador_id &&
+    eventoRenuevaGestion({
+      evento: "oferta",
+      actor: { role: session.role, vendedorId: session.vendedorId ?? null },
+      assignedVendedorId: session.vendedorId ?? null,
+      compradorId: oferta.comprador_id,
+    })
+  ) {
+    await touchUltimaGestionAgente(supabase, oferta.comprador_id);
+  }
   await notifyOfferRecipients(
     oferta.id,
     oferta.asset_id,
@@ -272,7 +300,20 @@ export async function fetchOfertasByAsset(assetId: string): Promise<OfertaRow[]>
 }
 
 export async function fetchOfertasByComprador(compradorId: string): Promise<OfertaRow[]> {
-  const supabase = await createClient();
+  const session = await getServerSession();
+  if (!session || (session.role !== "admin" && session.role !== "vendedor")) {
+    throw new Error("Acceso denegado");
+  }
+  const supabase = await createServiceClient();
+  const assigned = await fetchAssignedVendedorId(supabase, compradorId);
+  if (
+    !canReadComprador(
+      { role: session.role, vendedorId: session.vendedorId ?? null },
+      assigned,
+    )
+  ) {
+    throw new Error("Solo el agente asignado puede ver este comprador");
+  }
   const { data, error } = await supabase
     .from("ofertas")
     .select("*")

@@ -23,6 +23,7 @@
 | `supabase/migrations/20261109_informacion_adicional_y_documentos_agente.sql` | Tabela `asset_informacion_adicional` (admin escreve, agente só SELECT) e `documentos_agente_select` para activos em `vendedor_assets`. Não mexe nas políticas de notas |
 | `supabase/migrations/20261119_comentarios_autor_y_actividad.sql` | `author_role` nas notas, autor da informação adicional e do comentário da oferta, e `comprador_comentarios` (admin tudo; agente só o comprador atribuído). Idempotente. Staging; não produção neste passo |
 | `supabase/migrations/20261119b_nda_aceptaciones_activo.sql` | `asset_nda_aceptaciones`. Unique (activo, utilizador, versão). RLS: admin tudo; agente e comprador só `user_id = auth.uid()` (não usa `vendedores`). Idempotente. Staging; não produção neste passo |
+| `supabase/migrations/20261119c_compradores_gestion_agente.sql` | `compradores.ultima_gestion_agente_at` (filas existentes = `now()`) e `reasignado_inactividad_at`. Função `reasignar_compradores_inactivos` (90 dias, só `service_role`): desatribui, `agente = 'Admin'` e comentário de auditoria. Idempotente. Staging; não produção neste passo |
 
 Situación não precisa de SQL: usa `propiedades.fase_interna`, criada em `supabase-migration-inmuebles-propiedades.sql`.
 | `supabase-migration-documentos-bucket.sql` | Bucket privado `documentos` + RLS de storage. As descargas usam `createSignedUrl` (não `getPublicUrl`) |
@@ -30,7 +31,7 @@ Situación não precisa de SQL: usa `propiedades.fase_interna`, criada em `supab
 ## Ordem sugerida (novo ambiente)
 
 1. `supabase-schema.sql`
-2. Migrações incrementais por data/necessidade (excel-raw, map-columns, comprador-assets, inmuebles-propiedades, agentes, categoria-libre, comprador-acceso, `supabase/migrations/20261109_assets_published_at.sql`, `supabase/migrations/20261109_notas_admin_delete.sql`, `supabase/migrations/20261109_notas_select_visibilidad.sql`, `supabase/migrations/20261109_informacion_adicional_y_documentos_agente.sql`, `supabase/migrations/20261119_comentarios_autor_y_actividad.sql`, `supabase/migrations/20261119b_nda_aceptaciones_activo.sql`, `supabase-migration-documentos-bucket.sql`)
+2. Migrações incrementais por data/necessidade (excel-raw, map-columns, comprador-assets, inmuebles-propiedades, agentes, categoria-libre, comprador-acceso, `supabase/migrations/20261109_assets_published_at.sql`, `supabase/migrations/20261109_notas_admin_delete.sql`, `supabase/migrations/20261109_notas_select_visibilidad.sql`, `supabase/migrations/20261109_informacion_adicional_y_documentos_agente.sql`, `supabase/migrations/20261119_comentarios_autor_y_actividad.sql`, `supabase/migrations/20261119b_nda_aceptaciones_activo.sql`, `supabase/migrations/20261119c_compradores_gestion_agente.sql`, `supabase-migration-documentos-bucket.sql`)
 3. `supabase-dev-policies.sql` — **apenas dev**
 
 **Atenção:** `supabase-migration-inmuebles-propiedades.sql` pode truncar dados legacy de assets — rever antes de aplicar em produção.

@@ -63,7 +63,7 @@ Campos que antes viviam em `asset.adm.*` devem ser lidos de `asset.propiedades[]
 
 | Entidade | Tabela Supabase | Notas |
 |----------|-----------------|-------|
-| Comprador | `compradores` | Ligado a `auth.users`; interesses, presupuesto, NDA |
+| Comprador | `compradores` | Ligado a `auth.users`; interesses, presupuesto, NDA. `ultima_gestion_agente_at` é a última gestão do agente atribuído (90 dias; ver auth). `reasignado_inactividad_at` regista a passagem ao gestor |
 | Vendedor | `vendedores` | Agente; convite via Supabase Auth |
 | Tarea | `tareas` | Tarefas internas |
 | Oportunidade | `oportunidades` | Match com score |

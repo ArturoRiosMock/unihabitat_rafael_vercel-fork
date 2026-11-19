@@ -22,7 +22,11 @@ export async function fetchVendorPermissions(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     data.map((r: any) => [r.section as SectionId, { section: r.section as SectionId, canView: r.can_view ?? false, canEdit: r.can_edit ?? false }]),
   );
-  return defaults.map((d) => map.get(d.section) ?? d);
+  return defaults.map((d) => {
+    const row = map.get(d.section) ?? d;
+    if (row.section === "compradores") return { ...row, canView: true, canEdit: true };
+    return row;
+  });
 }
 
 export async function upsertVendorPermissions(

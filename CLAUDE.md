@@ -41,7 +41,7 @@ Tests live in `src/__tests__/`. Standalone helpers: `catastro.py`, `scripts/` (`
 
 ### Data flow
 
-1. **Server actions** (`src/app/actions/`) — all DB mutations; no `src/app/api/` routes
+1. **Server actions** (`src/app/actions/`) — DB mutations. The only route handler is the cron `GET /api/cron/reasignar-compradores` (`CRON_SECRET`), which unassigns buyers after 90 days without agent activity. Listing buyers runs the same check.
 2. **React Context** (`src/lib/context.tsx`) — client state with `refresh*` methods
 3. **Row mappers** (`src/lib/supabase/db.ts`) — snake_case DB ↔ camelCase models
 
@@ -57,6 +57,7 @@ Tests live in `src/__tests__/`. Standalone helpers: `catastro.py`, `scripts/` (`
 - **Catastro** (`src/lib/catastro/`, `src/app/actions/catastro.ts`, `maps.ts`) — manual enrichment via Spanish cadastre DNP + Geoapify; not automatic on Excel upload
 - **Email** (`src/lib/email/`) — Resend; `EMAIL_DRY_RUN` for dev
 - **Types** (`src/lib/types.ts`) — `Asset`, `Propiedad`, `Comprador`, `Vendedor`, etc.
+- **Agent buyers** (`src/lib/comprador-gestion.ts`) — an agent only reads and writes buyers assigned in `vendedor_compradores`. Creating one assigns it to them. `ultima_gestion_agente_at` resets on agent create, ficha edit, call/action comment, or an offer linked to that buyer. After 90 days the buyer returns to the admin (`reasignar_compradores_inactivos`). UI warns when fewer than 15 days remain.
 
 ### Database
 
@@ -71,6 +72,7 @@ Optional:
 - `GEOAPIFY_API_KEY` / `NEXT_PUBLIC_GEOAPIFY_KEY` — geocoding and static maps
 - `ASSET_UPSERT_AFTER_CATASTRO_ENRICH` — persist after Catastro enrich
 - `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_SUPPORT`, `EMAIL_DRY_RUN`
+- `CRON_SECRET` — bearer token for the 90-day buyer reassignment cron
 - `NEXT_PUBLIC_APP_URL`, `APP_ORIGIN` — public URLs for emails and auth redirects
 
 Full list: [docs/operacoes/variaveis-ambiente.md](docs/operacoes/variaveis-ambiente.md).

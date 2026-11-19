@@ -453,14 +453,21 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset, canDelet
     setOfertaError("");
     try {
       await createOfertaAdmin({
-        ...(isAgente ? {} : { compradorId: ofertaCompradorId }),
+        ...(ofertaCompradorId ? { compradorId: ofertaCompradorId } : {}),
         assetId,
         propuestaEuros: importe,
         comentarios: ofertaComentarios.trim() || undefined,
       });
+      if (isAgente && ofertaCompradorId) {
+        window.dispatchEvent(new Event("propcrm-compradores-updated"));
+      }
       setOfertaStatus("success");
       toast.success("Oferta registrada", {
-        description: isAgente ? "Asignada a tu usuario · pendiente" : "Estado: pendiente",
+        description: isAgente
+          ? ofertaCompradorId
+            ? "Vinculada a tu comprador · pendiente"
+            : "Asignada a tu usuario · pendiente"
+          : "Estado: pendiente",
       });
     } catch (err) {
       setOfertaStatus("error");
@@ -675,24 +682,23 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset, canDelet
                     <p className="mb-3 rounded-md border border-border bg-cream2 px-3 py-2 text-sm text-navy">
                       Oferta a nombre de: <span className="font-semibold">{session?.nombre ?? "Agente"}</span>
                     </p>
-                  ) : (
-                    <>
-                      <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-muted">Comprador</label>
-                      <select
-                        value={ofertaCompradorId}
-                        onChange={(e) => setOfertaCompradorId(e.target.value)}
-                        disabled={ofertaStatus === "sending"}
-                        className="mb-3 w-full rounded-md border border-border bg-cream2 px-3 py-2 text-sm text-text outline-none focus:border-navy disabled:opacity-50"
-                      >
-                        <option value="">Seleccionar comprador…</option>
-                        {compradores.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.nombre}{c.email ? ` · ${c.email}` : ""}
-                          </option>
-                        ))}
-                      </select>
-                    </>
-                  )}
+                  ) : null}
+                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-muted">
+                    {isAgente ? "Comprador (opcional)" : "Comprador"}
+                  </label>
+                  <select
+                    value={ofertaCompradorId}
+                    onChange={(e) => setOfertaCompradorId(e.target.value)}
+                    disabled={ofertaStatus === "sending"}
+                    className="mb-3 w-full rounded-md border border-border bg-cream2 px-3 py-2 text-sm text-text outline-none focus:border-navy disabled:opacity-50"
+                  >
+                    <option value="">{isAgente ? "Sin comprador concreto" : "Seleccionar comprador…"}</option>
+                    {compradores.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nombre}{c.email ? ` · ${c.email}` : ""}
+                      </option>
+                    ))}
+                  </select>
                   <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-muted">Importe (€)</label>
                   <input
                     type="text"

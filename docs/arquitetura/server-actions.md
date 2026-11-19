@@ -33,7 +33,7 @@ Todas em `src/app/actions/`. Padrão: `"use server"`, auth via `auth-server.ts`,
 
 | Função | Descrição |
 |--------|-----------|
-| `fetchCompradores` / `fetchCompradorById` | Leitura |
+| `fetchCompradores` / `fetchCompradorById` | Leitura com service role. Admin: todos. Agente: só os seus. Ao listar, aplica a reatribuição dos 90 dias. Cliente: lista vazia |
 | `fetchCompradorByEmail` | Lookup por email |
 | `ensureCompradorForEmail` | Liga auth user ao CRM |
 | `upsertComprador` | Criar/actualizar |

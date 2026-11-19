@@ -222,6 +222,8 @@ export function rowToComprador(r: any): Comprador {
     estado: r.estado ?? "Nuevo", estadoC: r.estado_c ?? "fp-nd",
     nda: r.nda ?? "Pendiente",
     acceso,
+    ultimaGestionAgenteAt: r.ultima_gestion_agente_at ?? null,
+    reasignadoInactividadAt: r.reasignado_inactividad_at ?? null,
   };
 }
 

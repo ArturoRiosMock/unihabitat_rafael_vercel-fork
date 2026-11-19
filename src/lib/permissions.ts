@@ -40,7 +40,7 @@ export function hrefToSection(pathname: string): SectionId | "config" | null {
 export function defaultVendorPermissions(): VendorPermission[] {
   return ADMIN_SECTIONS.map((s) => ({
     section: s.id,
-    canView: s.id === "activos",
-    canEdit: false,
+    canView: s.id === "activos" || s.id === "compradores",
+    canEdit: s.id === "compradores",
   }));
 }

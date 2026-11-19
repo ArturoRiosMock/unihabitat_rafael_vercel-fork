@@ -33,6 +33,8 @@ export function canViewSection(
   if (!session) return false;
   if (session.role === "admin") return true;
   if (sectionId === "config") return false;
+  // El agente siempre entra en Compradores. El servidor limita las filas a las suyas.
+  if (session.role === "vendedor" && sectionId === "compradores") return true;
   const perm = permissions.find((p) => p.section === sectionId);
   return perm?.canView ?? false;
 }
@@ -45,6 +47,7 @@ export function canEditSection(
   if (!session) return false;
   if (session.role === "admin") return true;
   if (sectionId === "config") return false;
+  if (session.role === "vendedor" && sectionId === "compradores") return true;
   const perm = permissions.find((p) => p.section === sectionId);
   return perm?.canEdit ?? false;
 }
