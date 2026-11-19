@@ -21,6 +21,7 @@ export interface AssetNdaLabelInput {
 
 export type AssetDocumentosGate =
   | { state: "open" }
+  | { state: "denied" }
   | { state: "nda"; version: string; text: string; assetLabel: string };
 
 export interface AssetNdaSignerRow {

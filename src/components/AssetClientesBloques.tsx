@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { fetchClientesInteresados } from "@/app/actions/asset-clientes";
+import { raiseActionError } from "@/lib/action-result";
 import { fetchOfertasByAsset, updateOfertaEstado } from "@/app/actions/ofertas";
 import { fetchCompradores } from "@/app/actions/compradores";
 import { OfertaEstadoForm, OfertaHistorialLista } from "@/components/OfertaEstadoForm";
@@ -67,7 +68,8 @@ export function AssetClientesBloques({ assetId }: { assetId: string }) {
   }) {
     setUpdatingId(ofertaId);
     try {
-      await updateOfertaEstado({ ofertaId, ...cambio });
+      const result = await updateOfertaEstado({ ofertaId, ...cambio });
+      raiseActionError(result);
       await load();
       toast.success("Estado de oferta actualizado", { description: etiquetaEstado(cambio.estado) });
     } finally {

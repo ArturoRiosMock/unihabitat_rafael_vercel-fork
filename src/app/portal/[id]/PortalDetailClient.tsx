@@ -10,6 +10,7 @@ import {
   CheckCircle2, AlertCircle, Send, Building, Ruler,
   Tag, Home, Layers, CalendarDays, Hash,
 } from "lucide-react";
+import { raiseActionError } from "@/lib/action-result";
 import { createOferta } from "@/app/actions/ofertas";
 import { fetchCompradorByEmail, ensureCompradorForEmail } from "@/app/actions/compradores";
 import {
@@ -594,13 +595,14 @@ function OfertaModal({
     setSubmitting(true);
     setError("");
     try {
-      await createOferta({
+      const result = await createOferta({
         compradorId,
         assetId,
         propuestaEuros: euros,
         comentarios: comentarios.trim() || undefined,
         datos: firma.datos,
       });
+      raiseActionError(result);
       setSuccess(true);
       setTimeout(() => { onClose(); setSuccess(false); }, 2000);
     } catch (err) {

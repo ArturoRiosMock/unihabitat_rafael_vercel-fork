@@ -178,9 +178,11 @@ describe("fetch y alta aplican la regla en el servidor", () => {
 
     const rows = await fetchCompradorComentarios("C1");
 
-    expect(rows[0]?.author).toBe("Gestor");
-    expect(rows[0]?.text).toBe("Llamada");
-    expect(JSON.stringify(rows)).not.toContain("Modesto");
+    expect(rows.ok).toBe(true);
+    if (!rows.ok) return;
+    expect(rows.comentarios[0]?.author).toBe("Gestor");
+    expect(rows.comentarios[0]?.text).toBe("Llamada");
+    expect(JSON.stringify(rows.comentarios)).not.toContain("Modesto");
   });
 
   it("un agente que no gestiona el comprador no lee ni escribe", async () => {
@@ -193,8 +195,10 @@ describe("fetch y alta aplican la regla en el servidor", () => {
       "@/app/actions/comprador-comentarios"
     );
 
-    await expect(fetchCompradorComentarios("C1")).rejects.toThrow(/agente asignado/);
-    await expect(createCompradorComentario("C1", "intento")).rejects.toThrow(/agente asignado/);
+    const lectura = await fetchCompradorComentarios("C1");
+    const alta = await createCompradorComentario("C1", "intento");
+    expect(lectura).toEqual({ ok: false, error: "No tienes acceso a este comprador" });
+    expect(alta).toEqual({ ok: false, error: "No tienes acceso a este comprador" });
     expect(sb.insert).not.toHaveBeenCalled();
   });
 
@@ -206,7 +210,7 @@ describe("fetch y alta aplican la regla en el servidor", () => {
     }));
     const { createCompradorComentario } = await import("@/app/actions/comprador-comentarios");
 
-    await createCompradorComentario("C1", "Segunda llamada");
+    await expect(createCompradorComentario("C1", "Segunda llamada")).resolves.toEqual({ ok: true });
 
     expect(sb.insert).toHaveBeenCalledWith({
       comprador_id: "C1",

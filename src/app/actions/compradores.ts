@@ -3,6 +3,7 @@
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { rowToComprador, compradorToRow } from "@/lib/supabase/db";
 import type { Comprador, CompradorAcceso } from "@/lib/types";
+import { actionError, type ActionResult } from "@/lib/action-result";
 import { getServerSession, requireAdmin, requireAdminOrVendor } from "@/lib/auth-server";
 import type { UserSession } from "@/lib/permissions";
 import {
@@ -283,32 +284,76 @@ export async function createComprador(input: {
 export async function updateCompradorFields(
   id: string,
   fields: CompradorFieldInput,
-): Promise<void> {
-  const session = await requireAdminOrVendor();
-  if (!id || Object.keys(fields).length === 0) return;
+): Promise<ActionResult> {
+  try {
+    const session = await requireAdminOrVendor();
+    if (!id || Object.keys(fields).length === 0) return { ok: true };
 
-  const sb = await createServiceClient();
-  const assigned = await fetchAssignedVendedorId(sb, id);
-  const plan = planCompradorUpdate(actorOf(session), assigned, fields);
-  if (!plan.ok) throw new Error(plan.error);
-  if (Object.keys(plan.patch).length === 0) return;
+    const sb = await createServiceClient();
+    const assigned = await fetchAssignedVendedorId(sb, id);
+    const plan = planCompradorUpdate(actorOf(session), assigned, fields);
+    if (!plan.ok) {
+      return {
+        ok: false,
+        error: plan.error === "Solo el agente asignado puede editar este comprador"
+          ? "No tienes acceso a este comprador"
+          : plan.error,
+      };
+    }
+    if (Object.keys(plan.patch).length === 0) return { ok: true };
 
-  const row: Record<string, string> = { ...plan.patch };
-  if (plan.renewsGestion) row.ultima_gestion_agente_at = new Date().toISOString();
-  const { error } = await sb.from("compradores").update(row).eq("id", id);
-  if (error) throw new Error(error.message);
+    const row: Record<string, string> = { ...plan.patch };
+    if (plan.renewsGestion) row.ultima_gestion_agente_at = new Date().toISOString();
+    const { error } = await sb.from("compradores").update(row).eq("id", id);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (err) {
+    return actionError(err, "No se pudo guardar la ficha");
+  }
 }
 
 /**
  * El comprador actualiza su propia ficha de firma.
  * El email queda anclado a la cuenta: no se puede cambiar desde el portal.
  */
-export async function updateMisDatosComprador(datos: DatosFirma): Promise<void> {
-  const session = await getServerSession();
-  if (!session?.email || session.role !== "cliente") {
-    throw new Error("Acceso denegado");
-  }
+export async function updateMisDatosComprador(datos: DatosFirma): Promise<ActionResult> {
+  try {
+    const session = await getServerSession();
+    if (!session?.email || session.role !== "cliente") {
+      return { ok: false, error: "Acceso denegado" };
+    }
 
+    const sb = await createServiceClient();
+    const { data, error } = await sb
+      .from("compradores")
+      .select("*")
+      .ilike("email", session.email.trim())
+      .limit(1)
+      .maybeSingle();
+    if (error) return { ok: false, error: error.message };
+    if (!data) return { ok: false, error: "Comprador no encontrado" };
+
+    const stored = datosFirmaFromRow(data);
+    const next = normalizarDatosFirma({ ...datos, email: stored.email });
+    const patch = patchDatosFirma(stored, next);
+    if (Object.keys(patch).length === 0) return { ok: true };
+
+    const { error: updateError } = await sb.from("compradores").update(patch).eq("id", data.id);
+    if (updateError) return { ok: false, error: updateError.message };
+    return { ok: true };
+  } catch (err) {
+    return actionError(err, "No se pudieron guardar los datos");
+  }
+}
+
+export async function setCompradorAcceso(id: string, acceso: CompradorAcceso): Promise<ActionResult> {
+  return updateCompradorFields(id, { acceso });
+}
+
+/** Comprador de la sesión actual: cookie dev-auth o usuario Supabase. */
+export async function fetchCompradorDeSesion(): Promise<Comprador | null> {
+  const session = await getServerSession();
+  if (!session?.email) return null;
   const sb = await createServiceClient();
   const { data, error } = await sb
     .from("compradores")
@@ -317,19 +362,7 @@ export async function updateMisDatosComprador(datos: DatosFirma): Promise<void> 
     .limit(1)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  if (!data) throw new Error("Comprador no encontrado");
-
-  const stored = datosFirmaFromRow(data);
-  const next = normalizarDatosFirma({ ...datos, email: stored.email });
-  const patch = patchDatosFirma(stored, next);
-  if (Object.keys(patch).length === 0) return;
-
-  const { error: updateError } = await sb.from("compradores").update(patch).eq("id", data.id);
-  if (updateError) throw new Error(updateError.message);
-}
-
-export async function setCompradorAcceso(id: string, acceso: CompradorAcceso): Promise<void> {
-  await updateCompradorFields(id, { acceso });
+  return data ? rowToComprador(data) : null;
 }
 
 export async function deleteComprador(id: string): Promise<void> {

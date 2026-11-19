@@ -189,7 +189,11 @@ describe("getDocumentUrl", () => {
     const bucket = storage({ signedUrl: "https://example.com/comprador" });
     vi.doMock("@/lib/supabase/server", () => ({
       createServiceClient: vi.fn(async () => ({
-        from: (table: string) => (table === "asset_nda_aceptaciones" ? idListQuery(["TEST-DOC-001"]) : propio),
+        from: (table: string) => {
+          if (table === "asset_nda_aceptaciones") return idListQuery(["TEST-DOC-001"]);
+          if (table === "comprador_assets") return idListQuery(["TEST-DOC-001"]);
+          return propio;
+        },
         storage: bucket,
       })),
     }));
@@ -205,7 +209,11 @@ describe("getDocumentUrl", () => {
     const blocked = storage({ signedUrl: "https://example.com/no" });
     vi.doMock("@/lib/supabase/server", () => ({
       createServiceClient: vi.fn(async () => ({
-        from: (table: string) => (table === "asset_nda_aceptaciones" ? idListQuery(["TEST-DOC-001"]) : ajeno),
+        from: (table: string) => {
+          if (table === "asset_nda_aceptaciones") return idListQuery(["TEST-DOC-001"]);
+          if (table === "comprador_assets") return idListQuery(["TEST-DOC-001"]);
+          return ajeno;
+        },
         storage: blocked,
       })),
     }));
@@ -390,6 +398,50 @@ describe("NDA del activo en servidor", () => {
     expect(list.map((doc) => doc.name)).toEqual(["nota-b.pdf"]);
     await expect(getDocumentUrl(notaB.storage_path)).resolves.toBe("https://example.com/admin");
     expect(bucket.createSignedUrl).toHaveBeenCalledWith(notaB.storage_path, 3600);
+  });
+});
+
+describe("NDA del activo para un comprador", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    getServerSession.mockReset();
+  });
+
+  function mockComprador(invited: string[]) {
+    vi.doMock("@/lib/supabase/server", () => ({
+      createServiceClient: vi.fn(async () => ({
+        from: (table: string) => {
+          if (table === "comprador_assets") return idListQuery(invited);
+          if (table === "asset_nda_aceptaciones") return idListQuery([]);
+          if (table === "assets") {
+            return query({
+              data: { id: "test-pub-002", referencia: "PUB-002", pob: "Madrid", addr: "Calle 2" },
+              error: null,
+            });
+          }
+          throw new Error(table);
+        },
+        storage: storage({}),
+      })),
+    }));
+  }
+
+  it("sin invitación devuelve acceso denegado y no el formulario", async () => {
+    getServerSession.mockResolvedValue(compradorSession);
+    mockComprador([]);
+    const { getAssetDocumentosGate } = await import("@/app/actions/documentos");
+    await expect(getAssetDocumentosGate("test-pub-002")).resolves.toEqual({ state: "denied" });
+  });
+
+  it("invitado sin NDA sigue recibiendo el formulario de ese activo", async () => {
+    getServerSession.mockResolvedValue(compradorSession);
+    mockComprador(["test-pub-002"]);
+    const { getAssetDocumentosGate } = await import("@/app/actions/documentos");
+    const gate = await getAssetDocumentosGate("test-pub-002");
+    expect(gate.state).toBe("nda");
+    if (gate.state === "nda") {
+      expect(gate.text).toContain("PUB-002");
+    }
   });
 });
 

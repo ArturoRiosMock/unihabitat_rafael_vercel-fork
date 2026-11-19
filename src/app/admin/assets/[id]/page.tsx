@@ -16,6 +16,7 @@ import { fetchCompradores } from "@/app/actions/compradores";
 import { fetchAssetByIdForAdmin, fetchAssetsByActivoIdForAdmin, toggleAssetPub, updateAssetFields, updatePropiedadFields } from "@/app/actions/assets";
 import { inviteCompradorToAsset, revokeCompradorFromAsset, fetchInvitedCompradores } from "@/app/actions/invitations";
 import { enviarSolicitudInformacion } from "@/app/actions/email-info-request";
+import { raiseActionError } from "@/lib/action-result";
 import { createOfertaAdmin } from "@/app/actions/ofertas";
 import { refreshAssetCatastro } from "@/app/actions/catastro";
 import { getAssetAgente, setAssetAgente } from "@/app/actions/vendedores";
@@ -477,12 +478,13 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset, canDelet
     setOfertaStatus("sending");
     setOfertaError("");
     try {
-      await createOfertaAdmin({
+      const result = await createOfertaAdmin({
         ...(ofertaCompradorId ? { compradorId: ofertaCompradorId, datos: datosOferta } : {}),
         assetId,
         propuestaEuros: importe,
         comentarios: ofertaComentarios.trim() || undefined,
       });
+      raiseActionError(result);
       if (isAgente && ofertaCompradorId) {
         window.dispatchEvent(new Event("propcrm-compradores-updated"));
       }
@@ -1043,6 +1045,14 @@ function TabDocumentacion({ assetId, currentUser, isAdmin: adminView }: { assetI
     setDragging(false);
     handleFileSelect(e.dataTransfer.files);
   };
+
+  if (!loading && gate?.state === "denied") {
+    return (
+      <div role="alert" className="rounded-lg border border-red/20 bg-red/10 px-3 py-2 text-xs text-red">
+        Acceso denegado
+      </div>
+    );
+  }
 
   if (!loading && !loadError && gate?.state === "nda") {
     return (

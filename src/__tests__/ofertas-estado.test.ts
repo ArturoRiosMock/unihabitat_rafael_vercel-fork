@@ -101,7 +101,7 @@ describe("updateOfertaEstado", () => {
 
     await expect(
       updateOfertaEstado({ ofertaId: "O1", estado: "firmada", fechaFirma: "2026-11-19" }),
-    ).rejects.toThrow(/No se puede pasar/);
+    ).resolves.toMatchObject({ ok: false, error: expect.stringMatching(/No se puede pasar/) });
     expect(sb.spies.update).not.toHaveBeenCalled();
   });
 
@@ -117,7 +117,7 @@ describe("updateOfertaEstado", () => {
 
     await expect(
       updateOfertaEstado({ ofertaId: "O1", estado: "firmada" }),
-    ).rejects.toThrow(/fecha de firma es obligatoria/);
+    ).resolves.toMatchObject({ ok: false, error: expect.stringMatching(/fecha de firma es obligatoria/) });
     expect(sb.spies.update).not.toHaveBeenCalled();
   });
 
@@ -173,7 +173,7 @@ describe("updateOfertaEstado", () => {
 
     await expect(
       updateOfertaEstado({ ofertaId: "O1", estado: "rechazada" }),
-    ).rejects.toThrow(/tus compradores/);
+    ).resolves.toMatchObject({ ok: false, error: expect.stringMatching(/tus compradores/) });
     expect(sb.spies.update).not.toHaveBeenCalled();
   });
 

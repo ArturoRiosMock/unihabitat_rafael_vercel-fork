@@ -17,6 +17,13 @@ vi.mock("@/lib/auth-server", () => ({
   requireAdminOrVendor: (...args: unknown[]) => requireAdminOrVendor(...args),
 }));
 
+function ofertaCreada<T extends { id: string }>(
+  result: { ok: true; oferta: T } | { ok: false; error: string },
+): T {
+  if (!result.ok) throw new Error(result.error);
+  return result.oferta;
+}
+
 vi.mock("@/lib/email/send", () => ({
   sendEmail: vi.fn(async () => undefined),
 }));
@@ -167,7 +174,7 @@ describe("createOfertaAdmin", () => {
         assetId: "A1",
         propuestaEuros: 1000,
       }),
-    ).rejects.toThrow(/No autorizado/);
+    ).resolves.toMatchObject({ ok: false, error: expect.stringMatching(/No autorizado/) });
   });
 
   it("rechaza importe inválido sin insertar", async () => {
@@ -184,7 +191,7 @@ describe("createOfertaAdmin", () => {
         assetId: "A1",
         propuestaEuros: 0,
       }),
-    ).rejects.toThrow(/mayor que 0/);
+    ).resolves.toMatchObject({ ok: false, error: expect.stringMatching(/mayor que 0/) });
     expect(sb.spies.insert).not.toHaveBeenCalled();
   });
 
@@ -201,7 +208,7 @@ describe("createOfertaAdmin", () => {
         assetId: "A1",
         propuestaEuros: 1000,
       }),
-    ).rejects.toThrow(/Selecciona un comprador/);
+    ).resolves.toMatchObject({ ok: false, error: expect.stringMatching(/Selecciona un comprador/) });
     expect(sb.spies.insert).not.toHaveBeenCalled();
   });
 
@@ -230,12 +237,12 @@ describe("createOfertaAdmin", () => {
     }));
     const { createOfertaAdmin } = await import("@/app/actions/ofertas");
 
-    const out = await createOfertaAdmin({
+    const out = ofertaCreada(await createOfertaAdmin({
       compradorId: "C1",
       assetId: "A1",
       propuestaEuros: 125000,
       comentarios: "nota",
-    });
+    }));
 
     expect(out.estado).toBe("realizada");
     expect(out.id).toBe("O1");
@@ -294,10 +301,10 @@ describe("createOfertaAdmin", () => {
     }));
     const { createOfertaAdmin } = await import("@/app/actions/ofertas");
 
-    const out = await createOfertaAdmin({
+    const out = ofertaCreada(await createOfertaAdmin({
       assetId: "A1",
       propuestaEuros: 50000,
-    });
+    }));
 
     expect(out.vendedor_id).toBe("V1");
     expect(out.comprador_id).toBeNull();
@@ -328,7 +335,7 @@ describe("createOfertaAdmin", () => {
         assetId: "A1",
         propuestaEuros: 1000,
       }),
-    ).rejects.toThrow(/Faltan datos para firmar la oferta/);
+    ).resolves.toMatchObject({ ok: false, error: expect.stringMatching(/Faltan datos para firmar la oferta/) });
     expect(sb.spies.insert).not.toHaveBeenCalled();
   });
 
@@ -357,7 +364,7 @@ describe("createOfertaAdmin", () => {
     }));
     const { createOfertaAdmin } = await import("@/app/actions/ofertas");
 
-    const out = await createOfertaAdmin({
+    const out = ofertaCreada(await createOfertaAdmin({
       compradorId: "C1",
       assetId: "A1",
       propuestaEuros: 80000,
@@ -375,7 +382,7 @@ describe("createOfertaAdmin", () => {
         tel: "600111222",
         email: "ana@example.com",
       },
-    });
+    }));
 
     expect(out.id).toBe("O3");
     expect(sb.spies.update).toHaveBeenCalledWith(
@@ -402,7 +409,7 @@ describe("createOfertaAdmin", () => {
         assetId: "MISSING",
         propuestaEuros: 1000,
       }),
-    ).rejects.toThrow(/Activo no encontrado/);
+    ).resolves.toMatchObject({ ok: false, error: expect.stringMatching(/Activo no encontrado/) });
   });
 
   it("agente sin fila vendedores devuelve error explícito", async () => {
@@ -424,7 +431,7 @@ describe("createOfertaAdmin", () => {
         assetId: "A1",
         propuestaEuros: 1000,
       }),
-    ).rejects.toThrow(/no tiene una fila vendedores/i);
+    ).resolves.toMatchObject({ ok: false, error: expect.stringMatching(/no tiene una fila vendedores/i) });
   });
 
   it("agente cuya fila vendedores no existe en DB devuelve error explícito", async () => {
@@ -446,7 +453,7 @@ describe("createOfertaAdmin", () => {
         assetId: "A1",
         propuestaEuros: 1000,
       }),
-    ).rejects.toThrow(/fila vendedores.*no existe/i);
+    ).resolves.toMatchObject({ ok: false, error: expect.stringMatching(/fila vendedores.*no existe/i) });
   });
 
   it("si el comprador ya tiene oferta en el activo, el mensaje es explícito y no inserta", async () => {
@@ -467,7 +474,7 @@ describe("createOfertaAdmin", () => {
         assetId: "A1",
         propuestaEuros: 1000,
       }),
-    ).rejects.toThrow("Este comprador ya tiene una oferta en este activo");
+    ).resolves.toEqual({ ok: false, error: "Este comprador ya tiene una oferta en este activo" });
     expect(sb.spies.insert).not.toHaveBeenCalled();
   });
 });

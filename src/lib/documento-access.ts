@@ -4,8 +4,9 @@
  * Admin: todos los de la ficha, sin NDA.
  * Agente: solo los del activo asignado en `vendedor_assets`, y solo si
  * aceptó el NDA de ese activo. El NDA de A no abre B.
- * Comprador: solo las filas con su `comprador_id`. Si la fila es de un
- * activo, además hace falta el NDA de ese activo.
+ * Comprador: solo activos invitados en `comprador_assets`. Sin invitación
+ * no hay NDA ni documentos. Con invitación, las filas de su `comprador_id`
+ * exigen además el NDA de ese activo.
  * No abre documentos de otro activo ni de otro comprador.
  */
 export type DocumentoAccessDecision = "ok" | "nda" | "denied";
@@ -18,7 +19,12 @@ export type DocumentoAccessFacts =
       assignedAssetIds: readonly string[];
       acceptedNdaAssetIds: readonly string[];
     }
-  | { role: "cliente"; compradorId: string | null; acceptedNdaAssetIds: readonly string[] };
+  | {
+      role: "cliente";
+      compradorId: string | null;
+      acceptedNdaAssetIds: readonly string[];
+      invitedAssetIds: readonly string[];
+    };
 
 export interface DocumentoRecord {
   asset_id: string | null;
@@ -33,6 +39,10 @@ function hasAssetNda(acceptedNdaAssetIds: readonly string[], assetId: string): b
   return acceptedNdaAssetIds.includes(assetId);
 }
 
+function isInvited(actor: Extract<DocumentoAccessFacts, { role: "cliente" }>, assetId: string | null): boolean {
+  return !!assetId && !!actor.compradorId && actor.invitedAssetIds.includes(assetId);
+}
+
 /** Abrir la lista de documentación de un activo: asignación (si aplica) y NDA. */
 export function listAssetDocumentosDecision(actor: DocumentoAccessFacts, assetId: string): DocumentoAccessDecision {
   switch (actor.role) {
@@ -43,7 +53,7 @@ export function listAssetDocumentosDecision(actor: DocumentoAccessFacts, assetId
       if (!hasAssetNda(actor.acceptedNdaAssetIds, assetId)) return "nda";
       return "ok";
     case "cliente":
-      if (!actor.compradorId) return "denied";
+      if (!isInvited(actor, assetId)) return "denied";
       if (!hasAssetNda(actor.acceptedNdaAssetIds, assetId)) return "nda";
       return "ok";
     default: {
@@ -63,7 +73,9 @@ export function readDocumentoDecision(actor: DocumentoAccessFacts, doc: Document
       return "ok";
     case "cliente":
       if (!actor.compradorId || doc.comprador_id !== actor.compradorId) return "denied";
-      if (doc.asset_id && !hasAssetNda(actor.acceptedNdaAssetIds, doc.asset_id)) return "nda";
+      if (!doc.asset_id) return "ok";
+      if (!isInvited(actor, doc.asset_id)) return "denied";
+      if (!hasAssetNda(actor.acceptedNdaAssetIds, doc.asset_id)) return "nda";
       return "ok";
     default: {
       const _exhaustive: never = actor;

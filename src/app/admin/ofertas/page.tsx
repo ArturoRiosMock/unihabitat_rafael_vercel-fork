@@ -3,6 +3,7 @@
 import { Suspense, useState, useEffect, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useApp } from "@/lib/context";
+import { raiseActionError } from "@/lib/action-result";
 import { fetchOfertas, updateOfertaEstado } from "@/app/actions/ofertas";
 import { fetchCompradores } from "@/app/actions/compradores";
 import { fetchAssetByIdForAdmin } from "@/app/actions/assets";
@@ -120,7 +121,8 @@ function OfertasPageInner() {
   }) {
     setUpdatingId(ofertaId);
     try {
-      await updateOfertaEstado({ ofertaId, ...cambio });
+      const result = await updateOfertaEstado({ ofertaId, ...cambio });
+      raiseActionError(result);
       await loadData();
       toast.success("Estado de oferta actualizado", { description: etiquetaEstado(cambio.estado) });
     } catch (err) {

@@ -4,8 +4,8 @@ import { useState, useEffect } from "react";
 import { fetchOfertasByComprador } from "@/app/actions/ofertas";
 import { etiquetaEstado, type OfertaEstado, type OfertaRow } from "@/lib/oferta-workflow";
 import { fetchAssetById } from "@/app/actions/assets";
-import { getSession } from "@/app/login/actions";
-import { fetchCompradorByEmail, ensureCompradorForEmail } from "@/app/actions/compradores";
+import { fetchCurrentSession } from "@/app/actions/session";
+import { ensureCompradorForEmail, fetchCompradorDeSesion } from "@/app/actions/compradores";
 import type { Asset } from "@/lib/types";
 import Link from "next/link";
 import { ArrowLeft, FileText, CheckCircle2, Clock, XCircle, Loader2, Euro, AlertCircle } from "lucide-react";
@@ -24,9 +24,9 @@ export default function MisOfertasPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const session = await getSession();
+      const session = await fetchCurrentSession();
       if (!session?.email) return;
-      let row = await fetchCompradorByEmail(session.email);
+      let row = await fetchCompradorDeSesion();
       let cid = row?.id ?? null;
       if (!cid) {
         cid = await ensureCompradorForEmail(session.email, session.nombre || "Usuario");

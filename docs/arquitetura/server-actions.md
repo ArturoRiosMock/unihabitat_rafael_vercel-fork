@@ -36,7 +36,7 @@ Todas em `src/app/actions/`. Padrão: `"use server"`, auth via `auth-server.ts`,
 | `fetchCompradores` / `fetchCompradorById` | Leitura com service role. Admin: todos. Agente: só os seus. Ao listar, aplica a reatribuição dos 90 dias. Cliente: lista vazia |
 | `fetchCompradorByEmail` | Lookup por email |
 | `ensureCompradorForEmail` | Liga auth user ao CRM. Se o nome chega inteiro, parte-o em nome e apelidos |
-| `createComprador` / `updateCompradorFields` | Alta e ficha. Admin e o agente atribuído. A ficha inclui os dados de firma |
+| `createComprador` / `updateCompradorFields` | Alta e ficha. Admin e o agente atribuído. A ficha inclui os dados de firma. A edição devolve `{ ok: false, error }` (p.ex. «No tienes acceso a este comprador») em vez de `throw`, para a UI mostrar o texto |
 | `updateMisDatosComprador` | O próprio comprador grava a ficha de firma. O email fica o da conta |
 | `upsertComprador` | Criar/actualizar |
 
@@ -80,12 +80,12 @@ Todas em `src/app/actions/`. Padrão: `"use server"`, auth via `auth-server.ts`,
 
 | Função | Descrição |
 |--------|-----------|
-| `createOferta` | Comprador submete proposta em estado `realizada`. Exige a ficha de firma. Se já existe oferta desse comprador no activo: «Este comprador ya tiene una oferta en este activo» |
-| `createOfertaAdmin` | Admin ou agente. Com comprador, a mesma validação. Sem comprador, a oferta fica em nome do agente |
+| `createOferta` | Comprador submete proposta em estado `realizada`. Exige a ficha de firma. Devolve `{ ok: true, oferta }` ou `{ ok: false, error }`. Duplicado: «Este comprador ya tiene una oferta en este activo» |
+| `createOfertaAdmin` | Admin ou agente. Com comprador, a mesma validação. Sem comprador, a oferta fica em nome do agente. Mesmo resultado `{ ok }` |
 | `fetchOfertas` / `fetchOfertasByAsset` | Admin vê todas. Agente só as suas e as dos compradores que gere. Exige sessão admin ou agente |
 | `fetchOfertasByComprador` | Admin, o agente atribuído, ou o próprio comprador |
 | `fetchOfertasPendientes` | `realizada` e `contraofertada`, com o mesmo filtro de agente |
-| `updateOfertaEstado` | Transições válidas no servidor. Contraoferta grava importe e nota na mesma oferta e no histórico. `firmada` exige data. Não envia email ao comprador |
+| `updateOfertaEstado` | Transições válidas no servidor. Devolve `{ ok: false, error }` (p.ex. «No se puede pasar de … a …»). Contraoferta grava importe e nota na mesma oferta e no histórico. `firmada` exige data. Não envia email ao comprador |
 | `firmarNDA` | Já não muda o estado. O NDA assina-se na documentação do activo |
 | `fetchClientesInteresados` | [`asset-clientes.ts`](../../src/app/actions/asset-clientes.ts). Compradores atribuídos, com favorito ou com NDA do activo. Sem duplicar. O agente só vê os seus |
 
@@ -121,7 +121,7 @@ Todas em `src/app/actions/`. Padrão: `"use server"`, auth via `auth-server.ts`,
 |----------|-------------------|
 | [`tareas.ts`](../../src/app/actions/tareas.ts) | `fetchTareas`, `upsertTarea`, `toggleTareaDone` |
 | [`notas.ts`](../../src/app/actions/notas.ts) | `fetchNotas` (agente: só as suas; admin: todas do `scope`; autor admin sai como «Gestor»), `createNota` (grava `author_role` da sessão), `deleteNota` (só admin; agentes não apagam notas próprias nem alheias) |
-| [`comprador-comentarios.ts`](../../src/app/actions/comprador-comentarios.ts) | `fetchCompradorComentarios`, `createCompradorComentario`. Admin: todos. Agente: só o comprador que gere |
+| [`comprador-comentarios.ts`](../../src/app/actions/comprador-comentarios.ts) | `fetchCompradorComentarios`, `createCompradorComentario`. Admin: todos. Agente: só o comprador que gere. Sem acesso: `{ ok: false, error: "No tienes acceso a este comprador" }` |
 | [`mensajes.ts`](../../src/app/actions/mensajes.ts) | `fetchMensajes`, `sendMensaje` |
 | [`informacion-adicional.ts`](../../src/app/actions/informacion-adicional.ts) | `fetchInformacionAdicional` (admin e agente), `saveInformacionAdicional` (só admin) |
 | [`documentos.ts`](../../src/app/actions/documentos.ts) | Lista e URL firmada (`createSignedUrl`, bucket privado, 1 h). Agente: `vendedor_assets` e NDA do activo. Comprador: o seu `comprador_id` e, se o ficheiro é do activo, o NDA. Admin sem NDA. `getAssetDocumentosGate`, `acceptAssetNda`, `fetchAssetNdaSigners` |

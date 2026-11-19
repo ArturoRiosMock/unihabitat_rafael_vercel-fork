@@ -1,5 +1,6 @@
 "use server";
 
+import { actionError, type ActionResult } from "@/lib/action-result";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
 import { EMAIL_SUPPORT } from "@/lib/email/resend";
@@ -338,7 +339,7 @@ async function notifyOfferRecipients(
   }
 }
 
-export async function createOferta(params: {
+async function createOfertaUnchecked(params: {
   compradorId: string;
   assetId: string;
   propuestaEuros: number;
@@ -399,12 +400,26 @@ export async function createOferta(params: {
   return oferta;
 }
 
+export async function createOferta(params: {
+  compradorId: string;
+  assetId: string;
+  propuestaEuros: number;
+  comentarios?: string;
+  datos?: DatosFirma;
+}): Promise<ActionResult<{ oferta: OfertaRow }>> {
+  try {
+    return { ok: true, oferta: await createOfertaUnchecked(params) };
+  } catch (err) {
+    return actionError(err, "No se pudo registrar la oferta");
+  }
+}
+
 /**
  * Alta de oferta desde admin/vendedor (ficha del activo).
  * Agente: se asigna a session.vendedorId (sin comprador).
  * Admin: requiere compradorId.
  */
-export async function createOfertaAdmin(params: {
+async function createOfertaAdminUnchecked(params: {
   compradorId?: string;
   assetId: string;
   propuestaEuros: number;
@@ -532,6 +547,20 @@ export async function createOfertaAdmin(params: {
   return oferta;
 }
 
+export async function createOfertaAdmin(params: {
+  compradorId?: string;
+  assetId: string;
+  propuestaEuros: number;
+  comentarios?: string;
+  datos?: DatosFirma;
+}): Promise<ActionResult<{ oferta: OfertaRow }>> {
+  try {
+    return { ok: true, oferta: await createOfertaAdminUnchecked(params) };
+  } catch (err) {
+    return actionError(err, "No se pudo registrar la oferta");
+  }
+}
+
 async function leerOfertas(
   sb: SupabaseClient,
   session: UserSession,
@@ -634,7 +663,7 @@ export async function fetchOfertas(estado?: OfertaEstado | ""): Promise<OfertaRo
  * Cambia el estado si la transición es válida. La contraoferta actualiza
  * la misma oferta y añade una fila al historial. No envía email al comprador.
  */
-export async function updateOfertaEstado(input: CambioOfertaInput): Promise<void> {
+async function updateOfertaEstadoUnchecked(input: CambioOfertaInput): Promise<void> {
   const session = await requireAdminOrVendor();
   const ofertaId = input.ofertaId?.trim();
   if (!ofertaId) throw new Error("Falta la oferta");
@@ -675,6 +704,15 @@ export async function updateOfertaEstado(input: CambioOfertaInput): Promise<void
     author: author.author,
     author_role: author.author_role,
   });
+}
+
+export async function updateOfertaEstado(input: CambioOfertaInput): Promise<ActionResult> {
+  try {
+    await updateOfertaEstadoUnchecked(input);
+    return { ok: true };
+  } catch (err) {
+    return actionError(err, "No se pudo cambiar el estado de la oferta");
+  }
 }
 
 /**

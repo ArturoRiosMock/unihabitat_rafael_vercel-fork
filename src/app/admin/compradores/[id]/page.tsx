@@ -23,6 +23,7 @@ import {
   Shield,
   Phone,
 } from "lucide-react";
+import { raiseActionError } from "@/lib/action-result";
 import { getCompradorAgente, setCompradorAgente } from "@/app/actions/vendedores";
 import {
   deleteComprador,
@@ -177,7 +178,7 @@ function FichaCompradorCard({ c }: { c: Comprador }) {
   async function save() {
     setSaving(true);
     try {
-      await updateCompradorFields(c.id, {
+      const result = await updateCompradorFields(c.id, {
         nombre: firma.nombre,
         apellidos: firma.apellidos,
         email: firma.email,
@@ -196,6 +197,7 @@ function FichaCompradorCard({ c }: { c: Comprador }) {
         presupuesto,
         nda,
       });
+      raiseActionError(result);
       await refreshCompradores();
       toast.success("Ficha actualizada");
     } catch (err) {
@@ -371,7 +373,8 @@ function AccesoYNdaCard({ c }: { c: Comprador }) {
   async function save() {
     setSaving(true);
     try {
-      await updateCompradorFields(c.id, { acceso, nda });
+      const result = await updateCompradorFields(c.id, { acceso, nda });
+      raiseActionError(result);
       await refreshCompradores();
       toast.success("Acceso y NDA actualizados");
     } catch (err) {
@@ -386,7 +389,8 @@ function AccesoYNdaCard({ c }: { c: Comprador }) {
   async function toggleAccesoRapido(next: CompradorAcceso) {
     setSaving(true);
     try {
-      await setCompradorAcceso(c.id, next);
+      const result = await setCompradorAcceso(c.id, next);
+      raiseActionError(result);
       setAcceso(next);
       await refreshCompradores();
       toast.success(next === "activo" ? "Acceso activado" : "Acceso desactivado");
@@ -571,7 +575,9 @@ function TabConversacion() {
 }
 
 function isActividadDenied(message: string): boolean {
-  return message.startsWith("Acceso") || message.includes("agente asignado");
+  return message.startsWith("Acceso")
+    || message.includes("agente asignado")
+    || message.includes("No tienes acceso");
 }
 
 function ActividadCompradorCard({ compradorId }: { compradorId: string }) {
@@ -587,9 +593,14 @@ function ActividadCompradorCard({ compradorId }: { compradorId: string }) {
     let cancelled = false;
     setLoading(true);
     fetchCompradorComentarios(compradorId)
-      .then((data) => {
+      .then((result) => {
         if (cancelled) return;
-        setRows(data);
+        if (!result.ok) {
+          setRows([]);
+          setError(result.error);
+          return;
+        }
+        setRows(result.comentarios);
         setError(null);
       })
       .catch((err: unknown) => {
@@ -611,7 +622,8 @@ function ActividadCompradorCard({ compradorId }: { compradorId: string }) {
     if (!text.trim() || saving) return;
     setSaving(true);
     try {
-      await createCompradorComentario(compradorId, text);
+      const result = await createCompradorComentario(compradorId, text);
+      raiseActionError(result);
       setText("");
       toast.success("Comentario guardado");
       setReloadKey((current) => current + 1);

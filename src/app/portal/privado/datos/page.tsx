@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Loader2, Save } from "lucide-react";
+import { raiseActionError } from "@/lib/action-result";
 import { ensureCompradorForEmail, fetchCompradorByEmail, updateMisDatosComprador } from "@/app/actions/compradores";
 import { createClient } from "@/lib/supabase/client";
 import { DatosFirmaFields, DatosOfertaEstado } from "@/components/DatosFirmaFields";
@@ -93,7 +94,8 @@ export default function MisDatosPage() {
   async function save() {
     setSaving(true);
     try {
-      await updateMisDatosComprador(datos);
+      const result = await updateMisDatosComprador(datos);
+      raiseActionError(result);
       toast.success("Datos guardados");
     } catch (err) {
       toast.error("No se pudieron guardar", {

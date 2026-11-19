@@ -1,5 +1,6 @@
 "use server";
 
+import { actionError, type ActionResult } from "@/lib/action-result";
 import { getServerSession } from "@/lib/auth-server";
 import { displayCommentAuthor } from "@/lib/comment-author";
 import {
@@ -48,69 +49,91 @@ async function assignedVendedorId(compradorId: string): Promise<string | null> {
  * Historial de llamadas y acciones de un comprador, más reciente primero.
  * Admin ve todos. El agente solo el comprador que gestiona.
  */
-export async function fetchCompradorComentarios(compradorId: string): Promise<CompradorComentario[]> {
-  const session = await getServerSession();
-  if (!session) throw new Error("Acceso denegado");
+export async function fetchCompradorComentarios(
+  compradorId: string,
+): Promise<ActionResult<{ comentarios: CompradorComentario[] }>> {
+  try {
+    const session = await getServerSession();
+    if (!session) return { ok: false, error: "Acceso denegado" };
 
-  const id = compradorId.trim();
-  if (!id) throw new Error("Comprador no válido");
+    const id = compradorId.trim();
+    if (!id) return { ok: false, error: "Comprador no válido" };
 
-  const assigned = await assignedVendedorId(id);
-  if (
-    !canReadCompradorComentarios({
-      role: session.role,
-      vendedorId: session.vendedorId ?? null,
-      assignedVendedorId: assigned,
-    })
-  ) {
-    throw new Error(
-      session.role === "vendedor"
-        ? "Solo el agente asignado puede comentar este comprador"
-        : "Acceso denegado",
-    );
+    const assigned = await assignedVendedorId(id);
+    if (
+      !canReadCompradorComentarios({
+        role: session.role,
+        vendedorId: session.vendedorId ?? null,
+        assignedVendedorId: assigned,
+      })
+    ) {
+      return {
+        ok: false,
+        error: session.role === "vendedor"
+          ? "No tienes acceso a este comprador"
+          : "Acceso denegado",
+      };
+    }
+
+    const supabase = await createServiceClient();
+    const { data, error } = await supabase
+      .from("comprador_comentarios")
+      .select("id, comprador_id, author, author_role, text, created_at")
+      .eq("comprador_id", id)
+      .order("created_at", { ascending: false });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, comentarios: ((data ?? []) as ComentarioStored[]).map(presentComentario) };
+  } catch (err) {
+    return actionError(err, "No se pudieron cargar los comentarios");
   }
-
-  const supabase = await createServiceClient();
-  const { data, error } = await supabase
-    .from("comprador_comentarios")
-    .select("id, comprador_id, author, author_role, text, created_at")
-    .eq("comprador_id", id)
-    .order("created_at", { ascending: false });
-  if (error) throw new Error(error.message);
-  return ((data ?? []) as ComentarioStored[]).map(presentComentario);
 }
 
 /** Alta de un comentario de llamada o acción. El autor sale de la sesión. */
-export async function createCompradorComentario(compradorId: string, text: string): Promise<void> {
-  const session = await getServerSession();
-  if (!session) throw new Error("Acceso denegado");
+export async function createCompradorComentario(
+  compradorId: string,
+  text: string,
+): Promise<ActionResult> {
+  try {
+    const session = await getServerSession();
+    if (!session) return { ok: false, error: "Acceso denegado" };
 
-  const id = compradorId.trim();
-  if (!id) throw new Error("Comprador no válido");
+    const id = compradorId.trim();
+    if (!id) return { ok: false, error: "Comprador no válido" };
 
-  const assigned = await assignedVendedorId(id);
-  const plan = planCompradorComentarioInsert({
-    role: session.role,
-    userId: session.userId ?? null,
-    nombre: session.nombre,
-    vendedorId: session.vendedorId ?? null,
-    assignedVendedorId: assigned,
-    compradorId: id,
-    text,
-  });
-  if (!plan.ok) throw new Error(plan.error);
-
-  const supabase = await createServiceClient();
-  const { error } = await supabase.from("comprador_comentarios").insert(plan.row);
-  if (error) throw new Error(error.message);
-
-  if (
-    eventoRenuevaGestion({
-      evento: "comentario",
-      actor: { role: session.role, vendedorId: session.vendedorId ?? null },
+    const assigned = await assignedVendedorId(id);
+    const plan = planCompradorComentarioInsert({
+      role: session.role,
+      userId: session.userId ?? null,
+      nombre: session.nombre,
+      vendedorId: session.vendedorId ?? null,
       assignedVendedorId: assigned,
-    })
-  ) {
-    await touchUltimaGestionAgente(supabase, id);
+      compradorId: id,
+      text,
+    });
+    if (!plan.ok) {
+      return {
+        ok: false,
+        error: plan.error === "Solo el agente asignado puede comentar este comprador"
+          ? "No tienes acceso a este comprador"
+          : plan.error,
+      };
+    }
+
+    const supabase = await createServiceClient();
+    const { error } = await supabase.from("comprador_comentarios").insert(plan.row);
+    if (error) return { ok: false, error: error.message };
+
+    if (
+      eventoRenuevaGestion({
+        evento: "comentario",
+        actor: { role: session.role, vendedorId: session.vendedorId ?? null },
+        assignedVendedorId: assigned,
+      })
+    ) {
+      await touchUltimaGestionAgente(supabase, id);
+    }
+    return { ok: true };
+  } catch (err) {
+    return actionError(err, "No se pudo guardar el comentario");
   }
 }

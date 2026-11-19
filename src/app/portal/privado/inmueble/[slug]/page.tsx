@@ -267,6 +267,16 @@ function MisDocumentosPanel({ assetId }: { assetId: string }) {
     );
   }
 
+  if (gate?.state === "denied") {
+    return (
+      <div role="alert" className="rounded-lg border border-border bg-white px-4 py-8 text-center">
+        <Lock size={28} className="mx-auto text-navy" />
+        <p className="mt-2 text-sm font-semibold text-navy">Acceso denegado</p>
+        <p className="mt-1 text-xs text-muted">No puedes firmar el NDA ni ver la documentación de este activo.</p>
+      </div>
+    );
+  }
+
   if (gate?.state === "nda") {
     return (
       <AssetNdaAcceptForm

@@ -63,6 +63,22 @@ async function resolveCompradorId(session: UserSession, sb: ServiceClient): Prom
   return (data?.id as string | undefined) ?? null;
 }
 
+async function invitedCompradorAssetIds(
+  sb: ServiceClient,
+  compradorId: string | null,
+  assetIds: string[],
+): Promise<string[]> {
+  const unique = [...new Set(assetIds.filter(Boolean))];
+  if (!compradorId || unique.length === 0) return [];
+  const { data, error } = await sb
+    .from("comprador_assets")
+    .select("asset_id")
+    .eq("comprador_id", compradorId)
+    .in("asset_id", unique);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => String((row as { asset_id: string }).asset_id));
+}
+
 async function assignedAssetIds(sb: ServiceClient, vendedorId: string, assetIds: string[]): Promise<string[]> {
   const unique = [...new Set(assetIds.filter(Boolean))];
   if (unique.length === 0) return [];
@@ -124,10 +140,15 @@ async function actorFor(session: UserSession, sb: ServiceClient, assetIds: strin
         resolveCompradorId(session, sb),
         resolveSessionUserId(session, sb),
       ]);
+      const [accepted, invited] = await Promise.all([
+        acceptedNdaAssetIds(sb, userId, assetIds),
+        invitedCompradorAssetIds(sb, compradorId, assetIds),
+      ]);
       return {
         role: "cliente",
         compradorId,
-        acceptedNdaAssetIds: await acceptedNdaAssetIds(sb, userId, assetIds),
+        acceptedNdaAssetIds: accepted,
+        invitedAssetIds: invited,
       };
     }
     default: {
@@ -186,13 +207,17 @@ export async function fetchDocumentos(opts: { assetId?: string; compradorId?: st
       const rows = (data ?? []) as DocRow[];
       if (assetId) return rows.filter((row) => canReadDocumento(actor, row));
       const userId = await resolveSessionUserId(session, sb);
-      const accepted = await acceptedNdaAssetIds(
-        sb,
-        userId,
-        rows.flatMap((row) => (row.asset_id ? [row.asset_id] : [])),
-      );
-      const withNda: DocumentoAccessFacts = { ...actor, acceptedNdaAssetIds: accepted };
-      return rows.filter((row) => canReadDocumento(withNda, row));
+      const assetIds = rows.flatMap((row) => (row.asset_id ? [row.asset_id] : []));
+      const [accepted, invited] = await Promise.all([
+        acceptedNdaAssetIds(sb, userId, assetIds),
+        invitedCompradorAssetIds(sb, actor.compradorId, assetIds),
+      ]);
+      const withAccess: DocumentoAccessFacts = {
+        ...actor,
+        acceptedNdaAssetIds: accepted,
+        invitedAssetIds: invited,
+      };
+      return rows.filter((row) => canReadDocumento(withAccess, row));
     }
     case "admin": {
       let query = sb.from("documentos").select("*");
@@ -328,8 +353,18 @@ export async function getAssetDocumentosGate(assetId: string): Promise<AssetDocu
   const sb = await createServiceClient();
   const actor = await actorFor(session, sb, [id]);
   const decision = listAssetDocumentosDecision(actor, id);
-  if (decision === "denied") throw new Error("Acceso denegado");
-  if (decision === "ok") return { state: "open" };
+  switch (decision) {
+    case "denied":
+      return { state: "denied" };
+    case "ok":
+      return { state: "open" };
+    case "nda":
+      break;
+    default: {
+      const _exhaustive: never = decision;
+      return _exhaustive;
+    }
+  }
 
   const assetLabel = await loadAssetNdaLabel(sb, id);
   return {

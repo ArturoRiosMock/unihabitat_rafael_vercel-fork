@@ -45,11 +45,19 @@ const comprador: DocumentoAccessFacts = {
   role: "cliente",
   compradorId: "comp-1",
   acceptedNdaAssetIds: ["TEST-DOC-001"],
+  invitedAssetIds: ["TEST-DOC-001", "ACTIVO-B"],
 };
 const compradorSinNda: DocumentoAccessFacts = {
   role: "cliente",
   compradorId: "comp-1",
   acceptedNdaAssetIds: [],
+  invitedAssetIds: ["TEST-DOC-001"],
+};
+const compradorSinInvitar: DocumentoAccessFacts = {
+  role: "cliente",
+  compradorId: "comp-1",
+  acceptedNdaAssetIds: [],
+  invitedAssetIds: [],
 };
 
 const notaSimple = { asset_id: "TEST-DOC-001", comprador_id: null };
@@ -101,6 +109,15 @@ describe("acceso a documentos", () => {
     expect(canReadDocumento(agenteSinNda, notaSimple)).toBe(false);
     expect(listAssetDocumentosDecision(compradorSinNda, "TEST-DOC-001")).toBe("nda");
     expect(readDocumentoDecision(compradorSinNda, delComprador)).toBe("nda");
+  });
+
+  it("un comprador sin invitación no firma el NDA ni abre documentos", () => {
+    expect(listAssetDocumentosDecision(compradorSinInvitar, "TEST-DOC-001")).toBe("denied");
+    expect(readDocumentoDecision(compradorSinInvitar, delComprador)).toBe("denied");
+    expect(canReadDocumento(compradorSinInvitar, delComprador)).toBe(false);
+    expect(canReadDocumento(compradorSinInvitar, personal)).toBe(true);
+    expect(listAssetDocumentosDecision(agenteSinNda, "TEST-DOC-001")).toBe("nda");
+    expect(listAssetDocumentosDecision(sinAsignar, "TEST-DOC-001")).toBe("denied");
   });
 
   it("el NDA del activo A abre A y no B", () => {
