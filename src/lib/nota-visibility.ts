@@ -19,6 +19,7 @@ export interface NotaInsertRow {
   comprador_id: string | null;
   author: string;
   author_id: string | null;
+  author_role: NotaVisibilitySession["role"];
   scope: NotaScope;
   text: string;
 }
@@ -95,6 +96,7 @@ export function planNotaInsert(input: {
           comprador_id: input.scope === "privada" ? null : (input.requestedCompradorId ?? null),
           author: input.nombre,
           author_id: input.userId,
+          author_role: "admin",
           scope: input.scope,
           text,
         },
@@ -113,6 +115,7 @@ export function planNotaInsert(input: {
           comprador_id: null,
           author: input.nombre,
           author_id: input.userId,
+          author_role: "vendedor",
           scope: "activo",
           text,
         },
@@ -134,6 +137,7 @@ export function planNotaInsert(input: {
           comprador_id: input.compradorId,
           author: input.nombre,
           author_id: input.userId,
+          author_role: "cliente",
           scope: "activo",
           text,
         },

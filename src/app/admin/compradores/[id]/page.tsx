@@ -21,6 +21,7 @@ import {
   UserCog,
   Trash2,
   Shield,
+  Phone,
 } from "lucide-react";
 import { getCompradorAgente, setCompradorAgente } from "@/app/actions/vendedores";
 import {
@@ -29,6 +30,12 @@ import {
   updateCompradorFields,
 } from "@/app/actions/compradores";
 import { fetchOfertasByComprador, type OfertaRow } from "@/app/actions/ofertas";
+import {
+  createCompradorComentario,
+  fetchCompradorComentarios,
+} from "@/app/actions/comprador-comentarios";
+import { CommentByline } from "@/components/CommentByline";
+import type { CompradorComentario } from "@/lib/comprador-comentarios";
 import { fmt } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 
@@ -166,6 +173,10 @@ function TabDatos({ c }: { c: Comprador }) {
 
       <div className="mb-4">
         <AgenteAssignmentCard compradorId={c.id} />
+      </div>
+
+      <div className="mb-4">
+        <ActividadCompradorCard compradorId={c.id} />
       </div>
 
       <div className="mb-4"><SectionCard title="Perfil de Búsqueda">
@@ -332,6 +343,16 @@ function HistorialOfertasCard({ compradorId }: { compradorId: string }) {
                 <div className="text-[11px] text-muted">
                   {fmt(o.propuesta_euros)} € · {new Date(o.created_at).toLocaleDateString("es-ES")}
                 </div>
+                {o.comentarios ? (
+                  <div className="mt-1">
+                    <CommentByline
+                      author={o.comentarios_author}
+                      authorRole={o.comentarios_author_role}
+                      createdAt={o.created_at}
+                    />
+                    <p className="mt-0.5 text-xs text-text">{o.comentarios}</p>
+                  </div>
+                ) : null}
               </div>
               <span className="rounded-md bg-blue/8 px-2 py-0.5 text-[10px] font-semibold text-blue">
                 {o.estado}
@@ -383,6 +404,113 @@ function TabConversacion() {
         <button className="flex items-center gap-1 self-end rounded-md bg-gold px-3.5 py-2.5 text-xs font-medium text-white hover:bg-gold2"><Send size={12} /></button>
       </div>
     </>
+  );
+}
+
+function isActividadDenied(message: string): boolean {
+  return message.startsWith("Acceso") || message.includes("agente asignado");
+}
+
+function ActividadCompradorCard({ compradorId }: { compradorId: string }) {
+  const [rows, setRows] = useState<CompradorComentario[]>([]);
+  const [text, setText] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetchCompradorComentarios(compradorId)
+      .then((data) => {
+        if (cancelled) return;
+        setRows(data);
+        setError(null);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setRows([]);
+        setError(err instanceof Error ? err.message : "No se pudieron cargar los comentarios");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [compradorId, reloadKey]);
+
+  const denied = error != null && isActividadDenied(error);
+
+  async function handleSave() {
+    if (!text.trim() || saving) return;
+    setSaving(true);
+    try {
+      await createCompradorComentario(compradorId, text);
+      setText("");
+      toast.success("Comentario guardado");
+      setReloadKey((current) => current + 1);
+    } catch (err) {
+      toast.error("No se pudo guardar el comentario", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <SectionCard title="Llamadas y acciones">
+      <div className="mb-3 flex items-start gap-2">
+        <Phone size={16} className="mt-0.5 flex-shrink-0 text-gold" />
+        <p className="text-xs text-muted">
+          Comentarios de llamadas y acciones. El administrador aparece como Gestor. El agente asignado aparece con su nombre. Los más recientes van primero.
+        </p>
+      </div>
+      {loading ? (
+        <div className="flex items-center gap-2 py-3 text-xs text-muted">
+          <Loader2 size={14} className="animate-spin" /> Cargando comentarios…
+        </div>
+      ) : denied ? (
+        <p className="py-2 text-sm text-muted">{error}</p>
+      ) : (
+        <>
+          {error ? <p className="mb-2 text-xs text-red">{error}</p> : null}
+          {rows.length === 0 ? (
+            <p className="mb-3 text-sm text-muted">Todavía no hay comentarios de llamadas o acciones.</p>
+          ) : (
+            <div className="mb-3 flex flex-col gap-2">
+              {rows.map((row) => (
+                <div key={row.id} className="rounded-lg border border-border bg-cream2 p-3" data-testid="comentario-comprador">
+                  <CommentByline author={row.author} authorRole={row.authorRole} createdAt={row.createdAt} />
+                  <p className="mt-1 text-sm leading-relaxed text-text whitespace-pre-wrap">{row.text}</p>
+                </div>
+              ))}
+            </div>
+          )}
+          <textarea
+            aria-label="Comentario de llamada o acción"
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            rows={3}
+            className="w-full rounded-md border border-border bg-cream2 p-3 text-sm text-text outline-none focus:border-navy"
+            placeholder="Qué se habló o qué acción se hizo…"
+          />
+          <div className="mt-2 flex justify-end">
+            <button
+              type="button"
+              disabled={saving || !text.trim()}
+              onClick={() => void handleSave()}
+              className="flex items-center gap-1.5 rounded-md bg-gold px-3 py-1.5 text-xs font-medium text-white hover:bg-gold2 disabled:opacity-50"
+            >
+              {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+              Guardar comentario
+            </button>
+          </div>
+        </>
+      )}
+    </SectionCard>
   );
 }
 

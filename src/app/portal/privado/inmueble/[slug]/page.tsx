@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { ArrowLeft, Download, FileText, StickyNote, FolderOpen, Lock, Star, Loader2, Send } from "lucide-react";
 import { InteractiveMap } from "@/components/InteractiveMap";
+import { CommentByline } from "@/components/CommentByline";
 import { toast } from "@/lib/toast";
 
 export default function PortalPrivadoInmuebleSlugPage({
@@ -361,11 +362,8 @@ function MisNotasPanel({
         ) : (
           notas.map((n) => (
             <div key={n.id} className="rounded-md border border-border bg-cream2 px-3 py-2">
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <span className="text-[11px] font-semibold text-navy">{n.author}</span>
-                <span className="text-[10px] text-muted">
-                  {new Date(n.created_at).toLocaleString("es-ES")}
-                </span>
+              <div className="mb-1">
+                <CommentByline author={n.author} authorRole={n.author_role} createdAt={n.created_at} />
               </div>
               <p className="text-sm text-text whitespace-pre-wrap">{n.text}</p>
             </div>

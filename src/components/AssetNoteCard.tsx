@@ -3,15 +3,11 @@
 import { useState } from "react";
 import { Loader2, Trash2 } from "lucide-react";
 import type { NotaRow } from "@/app/actions/notas";
+import { CommentByline } from "@/components/CommentByline";
 
 /** Texto del `window.confirm` antes de borrar una nota individual. */
 export const DELETE_NOTA_CONFIRM =
   "¿Eliminar esta nota?\n\nSe borrará de forma permanente.";
-
-function formatNoteDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
-}
 
 /**
  * Tarjeta de una nota de activo. El botón «Borrar» solo aparece si el padre
@@ -40,22 +36,19 @@ export function AssetNoteCard({
   return (
     <div className="rounded-lg border border-border bg-white p-3" data-testid="nota-activo">
       <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold text-navy">{note.author}</span>
-        <span className="flex items-center gap-2">
-          <span className="text-[11px] text-muted">{formatNoteDate(note.created_at)}</span>
-          {onDelete && (
-            <button
-              type="button"
-              onClick={() => void handleDelete()}
-              disabled={deleting}
-              aria-label="Borrar nota"
-              className="flex items-center gap-1 rounded-md border border-red/20 px-2 py-1 text-[11px] font-medium text-red hover:bg-red/5 disabled:opacity-50"
-            >
-              {deleting ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-              Borrar
-            </button>
-          )}
-        </span>
+        <CommentByline author={note.author} authorRole={note.author_role} createdAt={note.created_at} />
+        {onDelete && (
+          <button
+            type="button"
+            onClick={() => void handleDelete()}
+            disabled={deleting}
+            aria-label="Borrar nota"
+            className="flex items-center gap-1 rounded-md border border-red/20 px-2 py-1 text-[11px] font-medium text-red hover:bg-red/5 disabled:opacity-50"
+          >
+            {deleting ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+            Borrar
+          </button>
+        )}
       </div>
       <p className="text-sm leading-relaxed text-text">{note.text}</p>
     </div>

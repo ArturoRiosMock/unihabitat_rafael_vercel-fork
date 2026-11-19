@@ -2,7 +2,7 @@
 
 > **Propósito:** Documentar autenticação, roles e ACL de vendedores.  
 > **Público:** Desenvolvedores.  
-> **Última verificação:** 2026-06-12
+> **Última verificação:** 2026-11-19
 
 ## Roles
 
@@ -71,7 +71,9 @@ Políticas em `supabase-schema.sql` e `supabase-dev-policies.sql`. Função help
 
 Writes sensíveis usam **service-role** nas server actions (bypass RLS controlado no código).
 
-**Notas de activo:** `fetchNotas` / `createNota` filtram no servidor (service role, para a cookie demo). O agente só recebe notas de activo com o seu `author_id` (ou o nome, nas linhas antigas sem id). O admin recebe todas do alcance pedido. `scope = privada` só admin. `deleteNota` exige `requireAdmin()`. Não há política DELETE para vendedor nem comprador. No PostgREST, SELECT de agente é `notas_agente_select` e o DELETE directo só passa com `public.is_admin()` (`notas_admin_delete`).
+**Notas de activo:** `fetchNotas` / `createNota` filtram no servidor (service role, para a cookie demo). O agente só recebe notas de activo com o seu `author_id` (ou o nome, nas linhas antigas sem id). O admin recebe todas do alcance pedido. `scope = privada` só admin. `deleteNota` exige `requireAdmin()`. Não há política DELETE para vendedor nem comprador. No PostgREST, SELECT de agente é `notas_agente_select` e o DELETE directo só passa com `public.is_admin()` (`notas_admin_delete`). O nome visível resolve-se em `displayCommentAuthor`: rol `admin` → «Gestor»; sem autor → «Gestor»; agente ou comprador → o nome. Cada comentário mostra também data e hora.
+
+**Comentários do comprador:** `comprador_comentarios`. Admin lê e escreve todos. O agente só se `vendedor_compradores` o liga a esse comprador. O comprador não tem política. A action usa service role e repete a regra (cookie demo).
 
 **Información adicional:** tabela `asset_informacion_adicional`, uma fila por activo. `fetchInformacionAdicional` deixa admin e vendedor. `saveInformacionAdicional` recusa quem não é admin. RLS: `informacion_adicional_admin` (ALL) e `informacion_adicional_agente_select` (SELECT). Sem política para anon nem comprador. Não lê `notas`.
 

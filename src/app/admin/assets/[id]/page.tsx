@@ -850,7 +850,7 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset, canDelet
       <div className="mt-3">
         <SectionCard title="Notas del activo">
           <p className="mb-2 text-[11px] text-muted">
-            Cada agente ve solo las notas que él creó. El administrador ve todas, con autor y fecha.
+            Cada agente ve solo las notas que él creó. El administrador ve todas, con autor y fecha. Si la escribe administración, el autor se muestra como Gestor.
           </p>
           {assetNotesList.length > 0 && (
             <div className="mb-3 flex flex-col gap-2">
@@ -1126,7 +1126,7 @@ function TabAgentes({ asset, assetId, currentUser, canDeleteNotes }: { asset: As
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">Notas del agente</p>
           <p className="mt-1 text-[11px] text-muted">
-            El administrador ve las notas de cada agente, con autor y fecha. Un agente solo ve las suyas, en Características.
+            El administrador ve las notas de cada agente, con autor y fecha. Si la escribe administración, el autor se muestra como Gestor. Un agente solo ve las suyas, en Características.
           </p>
         </div>
         <button
@@ -1546,7 +1546,7 @@ function TabAdmin({ asset, assetId, togglePub, currentUser, reloadAsset, canDele
       <div className="mb-4">
         <SectionCard title="Notas privadas">
           <p className="mb-2 text-[11px] text-muted">
-            Solo administración. No aparecen en Características y ningún agente las ve.
+            Solo administración. No aparecen en Características y ningún agente las ve. El autor se muestra como Gestor, con fecha y hora.
           </p>
           <textarea
             value={adminNote}

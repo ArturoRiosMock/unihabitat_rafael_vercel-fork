@@ -10,6 +10,7 @@ import Link from "next/link";
 import { ArrowLeft, FileText, CheckCircle2, Clock, XCircle, Loader2, Euro, AlertCircle, PenTool } from "lucide-react";
 import { fmt } from "@/lib/utils";
 import { assetPrivateHref } from "@/lib/public-slug";
+import { CommentByline } from "@/components/CommentByline";
 import { toast } from "@/lib/toast";
 
 export default function MisOfertasPage() {
@@ -136,10 +137,12 @@ export default function MisOfertasPage() {
                     <div className="mb-2 text-xs text-muted">{asset.tip}</div>
                     {oferta.comentarios && (
                       <div className="mt-2 rounded-md bg-cream2 px-3 py-2">
-                        <div className="text-[10px] font-semibold uppercase tracking-wider text-muted mb-1">
-                          Tus comentarios
-                        </div>
-                        <p className="text-xs text-text">{oferta.comentarios}</p>
+                        <CommentByline
+                          author={oferta.comentarios_author}
+                          authorRole={oferta.comentarios_author_role}
+                          createdAt={oferta.created_at}
+                        />
+                        <p className="mt-1 text-xs text-text">{oferta.comentarios}</p>
                       </div>
                     )}
                   </div>

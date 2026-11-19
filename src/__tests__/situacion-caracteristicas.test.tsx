@@ -28,7 +28,12 @@ const mocks = vi.hoisted(() => ({
   updatePropiedadFields: vi.fn(async () => undefined),
   updateAssetFields: vi.fn(async () => undefined),
   toast: { success: vi.fn(), error: vi.fn() },
-  fetchInformacionAdicional: vi.fn(async () => "Visible para el agente"),
+  fetchInformacionAdicional: vi.fn(async () => ({
+    texto: "Visible para el agente",
+    author: "Gestor",
+    authorRole: "admin",
+    updatedAt: "2026-11-19T10:00:00.000Z",
+  })),
   saveInformacionAdicional: vi.fn(async () => undefined),
   fetchDocumentos: vi.fn(async () => [] as Array<{
     id: string;
@@ -225,7 +230,12 @@ describe("Situación en la pestaña Características", () => {
     mocks.toast.error.mockClear();
     mocks.fetchInformacionAdicional.mockClear();
     mocks.saveInformacionAdicional.mockClear();
-    mocks.fetchInformacionAdicional.mockResolvedValue("Visible para el agente");
+    mocks.fetchInformacionAdicional.mockResolvedValue({
+      texto: "Visible para el agente",
+      author: "Gestor",
+      authorRole: "admin",
+      updatedAt: "2026-11-19T10:00:00.000Z",
+    });
     mocks.fetchDocumentos.mockReset();
     mocks.fetchDocumentos.mockResolvedValue([]);
     currentAsset = makeAsset("Reservado");
@@ -350,7 +360,12 @@ describe("Deuda y proceso: una sola fuente", () => {
 describe("Información Adicional entre descripción y notas", () => {
   beforeEach(() => {
     mocks.session.role = "admin";
-    mocks.fetchInformacionAdicional.mockResolvedValue("Visible para el agente");
+    mocks.fetchInformacionAdicional.mockResolvedValue({
+      texto: "Visible para el agente",
+      author: "Gestor",
+      authorRole: "admin",
+      updatedAt: "2026-11-19T10:00:00.000Z",
+    });
     mocks.saveInformacionAdicional.mockClear();
     currentAsset = makeAsset("Reservado");
   });

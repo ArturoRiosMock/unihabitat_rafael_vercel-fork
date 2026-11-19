@@ -162,11 +162,24 @@ create table if not exists public.notas (
   comprador_id text references public.compradores(id) on delete cascade,
   author text not null,
   author_id uuid references auth.users(id) on delete set null,
+  author_role text check (author_role is null or author_role in ('admin', 'vendedor', 'cliente')),
   -- activo: notas de la ficha (agente ve las suyas, admin todas).
   -- privada: solo admin, pestaña Administrador.
   scope text not null default 'activo' check (scope in ('activo', 'privada')),
   text text not null,
   created_at timestamptz default now()
+);
+
+-- Llamadas y acciones sobre un comprador. Admin ve todo.
+-- El agente solo el comprador que tiene asignado.
+create table if not exists public.comprador_comentarios (
+  id uuid primary key default gen_random_uuid(),
+  comprador_id text not null references public.compradores(id) on delete cascade,
+  author text,
+  author_id uuid references auth.users(id) on delete set null,
+  author_role text check (author_role is null or author_role in ('admin', 'vendedor', 'cliente')),
+  text text not null,
+  created_at timestamptz not null default now()
 );
 
 create table if not exists public.documentos (
@@ -187,7 +200,9 @@ create table if not exists public.asset_informacion_adicional (
   asset_id text primary key references public.assets(id) on delete cascade,
   texto text not null default '',
   updated_at timestamptz not null default now(),
-  updated_by uuid references auth.users(id) on delete set null
+  updated_by uuid references auth.users(id) on delete set null,
+  updated_by_name text,
+  updated_by_role text check (updated_by_role is null or updated_by_role in ('admin', 'vendedor', 'cliente'))
 );
 
 create table if not exists public.oportunidades (
@@ -218,6 +233,11 @@ create table if not exists public.ofertas (
   asset_id text references public.assets(id) on delete cascade,
   propuesta_euros numeric not null,
   comentarios text,
+  comentarios_author text,
+  comentarios_author_role text check (
+    comentarios_author_role is null
+    or comentarios_author_role in ('admin', 'vendedor', 'cliente')
+  ),
   estado text default 'pendiente' check (estado in ('pendiente', 'validada', 'rechazada', 'nda_enviado', 'nda_firmado')),
   nda_enviado_at timestamptz,
   nda_firmado_at timestamptz,
@@ -286,6 +306,8 @@ create index if not exists idx_assets_cat_ref on public.assets(cat_ref);
 create index if not exists idx_mensajes_asset on public.mensajes(asset_id, created_at);
 create index if not exists idx_mensajes_comprador on public.mensajes(comprador_id, created_at);
 create index if not exists idx_notas_asset on public.notas(asset_id, created_at);
+create index if not exists idx_comprador_comentarios_comprador
+  on public.comprador_comentarios (comprador_id, created_at desc);
 create index if not exists idx_documentos_asset on public.documentos(asset_id);
 create index if not exists idx_documentos_comprador on public.documentos(comprador_id);
 create index if not exists idx_oportunidades_comprador on public.oportunidades(comprador_id);
@@ -316,6 +338,7 @@ alter table public.vendedores enable row level security;
 alter table public.tareas enable row level security;
 alter table public.mensajes enable row level security;
 alter table public.notas enable row level security;
+alter table public.comprador_comentarios enable row level security;
 alter table public.documentos enable row level security;
 alter table public.asset_informacion_adicional enable row level security;
 alter table public.oportunidades enable row level security;
@@ -426,6 +449,32 @@ create policy "notas_comprador_select" on public.notas
     and scope = 'activo'
     and comprador_id in (
       select c.id from public.compradores c where c.user_id = auth.uid()
+    )
+  );
+
+create policy "comprador_comentarios_admin" on public.comprador_comentarios
+  for all using (public.is_admin()) with check (public.is_admin());
+create policy "comprador_comentarios_agente_select" on public.comprador_comentarios
+  for select using (
+    public.is_vendedor()
+    and exists (
+      select 1
+      from public.vendedor_compradores vc
+      join public.vendedores v on v.id = vc.vendedor_id
+      where vc.comprador_id = comprador_comentarios.comprador_id
+        and v.user_id = auth.uid()
+    )
+  );
+create policy "comprador_comentarios_agente_insert" on public.comprador_comentarios
+  for insert with check (
+    public.is_vendedor()
+    and author_id = auth.uid()
+    and exists (
+      select 1
+      from public.vendedor_compradores vc
+      join public.vendedores v on v.id = vc.vendedor_id
+      where vc.comprador_id = comprador_comentarios.comprador_id
+        and v.user_id = auth.uid()
     )
   );
 

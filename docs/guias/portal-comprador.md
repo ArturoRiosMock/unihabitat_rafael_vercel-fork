@@ -2,7 +2,7 @@
 
 > **Propósito:** Guia da experiência do comprador no portal público e privado.  
 > **Público:** Operação e suporte.  
-> **Última verificação:** 2026-11-09
+> **Última verificação:** 2026-11-19
 
 ## Portal público (`/portal`)
 
@@ -34,7 +34,7 @@ O comprador vê:
 - **Información completa** (`/portal/privado/inmueble/[slug]`, separador Información) inclui **Situación** só em leitura. Mesma origem que a ficha pública. Vazio → «—».
 - Dados sensíveis visíveis conforme permissões
 - **Solicitar información** — formulario → email interno ([`email-info-request.ts`](../../src/app/actions/email-info-request.ts))
-- **Submeter oferta** — valor em € + comentários → fluxo em `/portal/privado/ofertas`
+- **Submeter oferta** — valor em € + comentários → fluxo em `/portal/privado/ofertas`. O comentário mostra autor e data/hora (admin lê-se «Gestor»)
 
 ## Ofertas (`/portal/privado/ofertas`)
 

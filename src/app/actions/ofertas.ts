@@ -5,7 +5,9 @@ import { sendEmail } from "@/lib/email/send";
 import { EMAIL_SUPPORT } from "@/lib/email/resend";
 import { offerTemplate } from "@/lib/email/templates";
 import { getServerSession, requireAdminOrVendor } from "@/lib/auth-server";
+import { displayCommentAuthor } from "@/lib/comment-author";
 import { fetchCompradorByEmail } from "@/app/actions/compradores";
+import type { UserSession } from "@/lib/permissions";
 
 export interface OfertaRow {
   id: string;
@@ -14,11 +16,38 @@ export interface OfertaRow {
   asset_id: string;
   propuesta_euros: number;
   comentarios: string | null;
+  /** Nombre visible del comentario. El admin llega como «Gestor». */
+  comentarios_author?: string | null;
+  comentarios_author_role?: string | null;
   estado: "pendiente" | "validada" | "rechazada" | "nda_enviado" | "nda_firmado";
   nda_enviado_at: string | null;
   nda_firmado_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+function commentAttribution(session: UserSession | null, comentarios: string | null): {
+  comentarios_author: string | null;
+  comentarios_author_role: string | null;
+} {
+  if (!comentarios) {
+    return { comentarios_author: null, comentarios_author_role: null };
+  }
+  return {
+    comentarios_author: session?.nombre?.trim() || null,
+    comentarios_author_role: session?.role ?? null,
+  };
+}
+
+function presentOferta(row: OfertaRow): OfertaRow {
+  if (!row.comentarios) return row;
+  return {
+    ...row,
+    comentarios_author: displayCommentAuthor({
+      author: row.comentarios_author,
+      authorRole: row.comentarios_author_role,
+    }),
+  };
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -114,6 +143,8 @@ export async function createOferta(params: {
   propuestaEuros: number;
   comentarios?: string;
 }): Promise<OfertaRow> {
+  const session = await getServerSession();
+  const comentarios = params.comentarios?.trim() || null;
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("ofertas")
@@ -121,14 +152,15 @@ export async function createOferta(params: {
       comprador_id: params.compradorId,
       asset_id: params.assetId,
       propuesta_euros: params.propuestaEuros,
-      comentarios: params.comentarios || null,
+      comentarios,
+      ...commentAttribution(session, comentarios),
       estado: "pendiente",
     })
     .select()
     .single();
   if (error) throw new Error(error.message);
 
-  const oferta = data as OfertaRow;
+  const oferta = presentOferta(data as OfertaRow);
   await notifyOfferRecipients(
     oferta.id,
     oferta.asset_id,
@@ -200,6 +232,7 @@ export async function createOfertaAdmin(params: {
     if (!compRow) throw new Error("Comprador no encontrado");
   }
 
+  const comentarios = params.comentarios?.trim() || null;
   const { data, error } = await supabase
     .from("ofertas")
     .insert({
@@ -207,14 +240,15 @@ export async function createOfertaAdmin(params: {
       vendedor_id: vendedorId,
       asset_id: assetId,
       propuesta_euros: propuesta,
-      comentarios: params.comentarios?.trim() || null,
+      comentarios,
+      ...commentAttribution(session, comentarios),
       estado: "pendiente",
     })
     .select()
     .single();
   if (error) throw new Error(error.message);
 
-  const oferta = data as OfertaRow;
+  const oferta = presentOferta(data as OfertaRow);
   await notifyOfferRecipients(
     oferta.id,
     oferta.asset_id,
@@ -234,7 +268,7 @@ export async function fetchOfertasByAsset(assetId: string): Promise<OfertaRow[]>
     .eq("asset_id", assetId)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return (data ?? []) as OfertaRow[];
+  return ((data ?? []) as OfertaRow[]).map(presentOferta);
 }
 
 export async function fetchOfertasByComprador(compradorId: string): Promise<OfertaRow[]> {
@@ -245,7 +279,7 @@ export async function fetchOfertasByComprador(compradorId: string): Promise<Ofer
     .eq("comprador_id", compradorId)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return (data ?? []) as OfertaRow[];
+  return ((data ?? []) as OfertaRow[]).map(presentOferta);
 }
 
 export async function fetchOfertasPendientes(): Promise<OfertaRow[]> {
@@ -256,7 +290,7 @@ export async function fetchOfertasPendientes(): Promise<OfertaRow[]> {
     .in("estado", ["pendiente", "nda_enviado"])
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return (data ?? []) as OfertaRow[];
+  return ((data ?? []) as OfertaRow[]).map(presentOferta);
 }
 
 /**
@@ -276,7 +310,7 @@ export async function fetchOfertas(estado?: OfertaRow["estado"] | ""): Promise<O
   if (estado) q = q.eq("estado", estado);
   const { data, error } = await q;
   if (error) throw new Error(error.message);
-  return (data ?? []) as OfertaRow[];
+  return ((data ?? []) as OfertaRow[]).map(presentOferta);
 }
 
 export async function updateOfertaEstado(

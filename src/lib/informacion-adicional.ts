@@ -6,6 +6,14 @@ export type InformacionAdicionalWritePlan =
   | { ok: true; texto: string }
   | { ok: false; error: string };
 
+/** Texto y atribución ya resuelta (el admin se lee como «Gestor»). */
+export interface InformacionAdicionalView {
+  texto: string;
+  author: string | null;
+  authorRole: string | null;
+  updatedAt: string | null;
+}
+
 /** Admin y cualquier agente leen el cuadro. El comprador y el anónimo no. */
 export function canReadInformacionAdicional(role: InformacionAdicionalRole): boolean {
   return role === "admin" || role === "vendedor";

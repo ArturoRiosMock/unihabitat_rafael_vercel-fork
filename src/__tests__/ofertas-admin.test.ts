@@ -203,6 +203,9 @@ describe("createOfertaAdmin", () => {
         asset_id: "A1",
         propuesta_euros: 125000,
         estado: "pendiente",
+        comentarios: "nota",
+        comentarios_author: "Admin",
+        comentarios_author_role: "admin",
       }),
     );
   });

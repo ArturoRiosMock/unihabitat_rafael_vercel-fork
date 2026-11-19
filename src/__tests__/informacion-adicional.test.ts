@@ -61,6 +61,8 @@ describe("fetch y save de información adicional", () => {
         asset_id: "TEST-DOC-001",
         texto: "Dato interno",
         updated_by: "user-admin",
+        updated_by_name: "Ana",
+        updated_by_role: "admin",
       }),
       { onConflict: "asset_id" },
     );
@@ -79,7 +81,12 @@ describe("fetch y save de información adicional", () => {
     }));
     const { fetchInformacionAdicional, saveInformacionAdicional } = await import("@/app/actions/informacion-adicional");
 
-    await expect(fetchInformacionAdicional("TEST-DOC-001")).resolves.toBe("Solo lectura");
+    await expect(fetchInformacionAdicional("TEST-DOC-001")).resolves.toEqual({
+      texto: "Solo lectura",
+      author: "Gestor",
+      authorRole: "admin",
+      updatedAt: null,
+    });
     await expect(saveInformacionAdicional("TEST-DOC-001", "cambio")).rejects.toThrow(
       "Solo el administrador puede modificar la información adicional",
     );

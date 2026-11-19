@@ -84,6 +84,7 @@ describe("planNotaInsert", () => {
         comprador_id: null,
         author: "Lucía Agent",
         author_id: "user-lucia",
+        author_role: "vendedor",
         scope: "activo",
         text: "la mía",
       },
@@ -106,6 +107,7 @@ describe("planNotaInsert", () => {
       expect(created.row.scope).toBe("privada");
       expect(created.row.comprador_id).toBeNull();
       expect(created.row.author).toBe("Ana Admin");
+      expect(created.row.author_role).toBe("admin");
     }
   });
 });
@@ -183,6 +185,33 @@ describe("fetchNotas y createNota aplican la regla en el servidor", () => {
     expect(rows.map((row) => row.author)).toEqual(["Lucía Agent", "Otro"]);
   });
 
+  it("una nota escrita por admin sale como Gestor y no con el nombre real", async () => {
+    getServerSession.mockResolvedValue(admin);
+    const sb = notesClient([
+      {
+        id: "1",
+        author: "Modesto Manzano",
+        author_id: "user-admin",
+        author_role: "admin",
+        scope: "activo",
+        comprador_id: null,
+        text: "llamada",
+        asset_id: "A1",
+        created_at: "2026-01-01T10:00:00.000Z",
+      },
+    ]);
+    vi.doMock("@/lib/supabase/server", () => ({
+      createServiceClient: vi.fn(async () => sb.client),
+    }));
+    const { fetchNotas } = await import("@/app/actions/notas");
+
+    const rows = await fetchNotas({ assetId: "A1", scope: "activo" });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.author).toBe("Gestor");
+    expect(JSON.stringify(rows)).not.toContain("Modesto");
+  });
+
   it("createNota guarda el autor de la sesión y el alcance privado", async () => {
     getServerSession.mockResolvedValue(admin);
     const sb = notesClient([]);
@@ -203,6 +232,7 @@ describe("fetchNotas y createNota aplican la regla en el servidor", () => {
       comprador_id: null,
       author: "Ana Admin",
       author_id: "user-admin",
+      author_role: "admin",
       scope: "privada",
       text: "nota interna",
     });

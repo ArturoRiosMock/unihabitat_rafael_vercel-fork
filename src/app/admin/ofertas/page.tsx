@@ -10,6 +10,7 @@ import type { Asset, Comprador } from "@/lib/types";
 import Link from "next/link";
 import { FileText, CheckCircle2, XCircle, Send, Loader2, AlertCircle, Euro, X } from "lucide-react";
 import { fmt } from "@/lib/utils";
+import { CommentByline } from "@/components/CommentByline";
 import { toast } from "@/lib/toast";
 
 const ESTADO_FILTRO: Array<OfertaRow["estado"] | ""> = [
@@ -295,10 +296,12 @@ function OfertasPageInner() {
 
                   {oferta.comentarios && (
                     <div className="mb-4 ml-12 rounded-md bg-cream2 px-3 py-2">
-                      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted mb-1">
-                        Comentarios
-                      </div>
-                      <p className="text-xs text-text">{oferta.comentarios}</p>
+                      <CommentByline
+                        author={oferta.comentarios_author}
+                        authorRole={oferta.comentarios_author_role}
+                        createdAt={oferta.created_at}
+                      />
+                      <p className="mt-1 text-xs text-text">{oferta.comentarios}</p>
                     </div>
                   )}
 

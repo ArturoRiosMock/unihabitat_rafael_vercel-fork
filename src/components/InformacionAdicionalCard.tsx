@@ -6,7 +6,16 @@ import {
   fetchInformacionAdicional,
   saveInformacionAdicional,
 } from "@/app/actions/informacion-adicional";
+import { CommentByline } from "@/components/CommentByline";
+import type { InformacionAdicionalView } from "@/lib/informacion-adicional";
 import { toast } from "@/lib/toast";
+
+const EMPTY_INFO: InformacionAdicionalView = {
+  texto: "",
+  author: null,
+  authorRole: null,
+  updatedAt: null,
+};
 
 interface InformacionAdicionalCardProps {
   assetId: string;
@@ -15,7 +24,7 @@ interface InformacionAdicionalCardProps {
 }
 
 export function InformacionAdicionalCard({ assetId, canWrite }: InformacionAdicionalCardProps) {
-  const [texto, setTexto] = useState("");
+  const [view, setView] = useState<InformacionAdicionalView>(EMPTY_INFO);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -24,10 +33,10 @@ export function InformacionAdicionalCard({ assetId, canWrite }: InformacionAdici
     setLoading(true);
     fetchInformacionAdicional(assetId)
       .then((value) => {
-        if (!cancelled) setTexto(value);
+        if (!cancelled) setView(value);
       })
       .catch(() => {
-        if (!cancelled) setTexto("");
+        if (!cancelled) setView(EMPTY_INFO);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -40,7 +49,9 @@ export function InformacionAdicionalCard({ assetId, canWrite }: InformacionAdici
   const handleSave = async () => {
     setSaving(true);
     try {
-      await saveInformacionAdicional(assetId, texto);
+      await saveInformacionAdicional(assetId, view.texto);
+      const fresh = await fetchInformacionAdicional(assetId);
+      setView(fresh);
       toast.success("Información adicional guardada");
     } catch (err) {
       toast.error("No se pudo guardar la información adicional", {
@@ -65,10 +76,15 @@ export function InformacionAdicionalCard({ assetId, canWrite }: InformacionAdici
         </div>
       ) : canWrite ? (
         <>
+          {view.author ? (
+            <div className="mb-2">
+              <CommentByline author={view.author} authorRole={view.authorRole} createdAt={view.updatedAt} />
+            </div>
+          ) : null}
           <textarea
             aria-label="Texto de información adicional"
-            value={texto}
-            onChange={(event) => setTexto(event.target.value)}
+            value={view.texto}
+            onChange={(event) => setView((current) => ({ ...current, texto: event.target.value }))}
             rows={4}
             className="w-full rounded-md border border-border bg-cream2 p-3 text-sm leading-[1.7] text-text outline-none focus:border-navy"
             placeholder="Notas internas visibles para todos los agentes. Solo el administrador puede editarlas."
@@ -86,9 +102,16 @@ export function InformacionAdicionalCard({ assetId, canWrite }: InformacionAdici
           </div>
         </>
       ) : (
-        <p className="whitespace-pre-wrap text-sm leading-[1.7] text-text">
-          {texto.trim() ? texto : "Sin información adicional"}
-        </p>
+        <>
+          {view.author ? (
+            <div className="mb-2">
+              <CommentByline author={view.author} authorRole={view.authorRole} createdAt={view.updatedAt} />
+            </div>
+          ) : null}
+          <p className="whitespace-pre-wrap text-sm leading-[1.7] text-text">
+            {view.texto.trim() ? view.texto : "Sin información adicional"}
+          </p>
+        </>
       )}
     </section>
   );

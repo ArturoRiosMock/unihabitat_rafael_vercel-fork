@@ -1,6 +1,7 @@
 "use server";
 
 import { getServerSession, requireAdmin } from "@/lib/auth-server";
+import { displayCommentAuthor } from "@/lib/comment-author";
 import {
   canReadNota,
   planNotaInsert,
@@ -13,11 +14,20 @@ export interface NotaRow {
   id: string;
   asset_id: string | null;
   comprador_id: string | null;
+  /** Nombre visible. Si el rol es admin, ya viene como «Gestor». */
   author: string;
   author_id?: string | null;
+  author_role?: string | null;
   scope?: NotaScope | null;
   text: string;
   created_at: string;
+}
+
+function presentNota(row: NotaRow): NotaRow {
+  return {
+    ...row,
+    author: displayCommentAuthor({ author: row.author, authorRole: row.author_role }),
+  };
 }
 
 async function buyerIdFor(session: UserSession): Promise<string | null> {
@@ -87,7 +97,9 @@ export async function fetchNotas(opts: {
     nombre: session.nombre,
     compradorId,
   };
-  return ((data ?? []) as NotaRow[]).filter((row) => canReadNota(visibilitySession, row, view));
+  return ((data ?? []) as NotaRow[])
+    .filter((row) => canReadNota(visibilitySession, row, view))
+    .map(presentNota);
 }
 
 export async function createNota(params: {

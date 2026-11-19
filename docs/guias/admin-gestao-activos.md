@@ -2,7 +2,7 @@
 
 > **Propósito:** Operações na ficha e lista de imóveis no admin.  
 > **Público:** Operação / admin.  
-> **Última verificação:** 2026-11-09
+> **Última verificação:** 2026-11-19
 
 ## Lista `/admin`
 
@@ -87,7 +87,7 @@ O agente só lista e assina documentos de activos presentes em `vendedor_assets`
 
 | Secção | Quem escreve | Quem lê |
 |--------|----------------|---------|
-| Características → **Notas del activo** | Admin e agente (`scope = activo`) | O agente só as que ele criou. O admin vê todas, com autor e data. |
+| Características → **Notas del activo** | Admin e agente (`scope = activo`) | O agente só as que ele criou. O admin vê todas. Autor e data/hora. Admin aparece como **Gestor**. |
 | Agentes → **Notas del agente** | Admin (a pestana é só admin) | O admin vê as notas de activo de todos os agentes. Um agente, se consultasse a action, só receberia as suas. |
 | Administrador → **Notas privadas** | Só admin (`scope = privada`) | Só admin. Não aparecem em Características nem para agentes. |
 | Portal → **Mis notas** | O comprador | Só esse comprador (e o admin, se pedir por `compradorId`). |
@@ -108,12 +108,15 @@ Apagar numa secção tira a nota das outras que mostrassem a mesma linha.
 
 O agente vê as suas notas em Características, **sem** botão. Não apaga notas próprias nem alheias. No portal, **Mis notas** (`/portal/privado/inmueble/[slug]`) não tem apagar.
 
-Os comentários de uma oferta (`ofertas.comentarios`) não são notas e não se apagam aqui.
+Os comentários de uma oferta (`ofertas.comentarios`) não são notas e não se apagam aqui. Mostram autor («Gestor» se for admin) e data/hora da oferta. O mesmo vale para **Información Adicional** (última edição).
+
+Na ficha do comprador (`/admin/compradores/[id]`) há **Llamadas y acciones** (`comprador_comentarios`): admin e o agente atribuído acrescentam comentários, mais recentes primeiro. Um agente não vê o comprador de outro.
 
 SQL idempotente:
 
 - DELETE: [`supabase/migrations/20261109_notas_admin_delete.sql`](../../supabase/migrations/20261109_notas_admin_delete.sql). A action `deleteNota` exige rol admin e usa service role (o admin demo com cookie `dev-auth` pode não cumprir `is_admin()`). A política `notas_admin_delete` mantém-se.
 - SELECT: [`supabase/migrations/20261109_notas_select_visibilidad.sql`](../../supabase/migrations/20261109_notas_select_visibilidad.sql). Colunas `author_id` e `scope` (`activo` \| `privada`). `notas_agente_select` e `notas_comprador_select`. Não cria DELETE para agente nem comprador.
+- Autor visível e atividade do comprador: [`supabase/migrations/20261119_comentarios_autor_y_actividad.sql`](../../supabase/migrations/20261119_comentarios_autor_y_actividad.sql). `notas.author_role`, autor da informação adicional e do comentário da oferta, tabela `comprador_comentarios`. Aplicar no SQL Editor de staging antes de usar estas colunas. Não aplicar em produção neste passo.
 
 ## Ficheiros relacionados
 

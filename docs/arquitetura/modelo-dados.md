@@ -2,7 +2,7 @@
 
 > **Propósito:** Explicar a separação Inmueble (Asset) vs Propiedad (carga) e o mapeamento DB.  
 > **Público:** Desenvolvedores e operação (conceitos).  
-> **Última verificação:** 2026-11-09
+> **Última verificação:** 2026-11-19
 
 ## Conceito central
 
@@ -69,7 +69,8 @@ Campos que antes viviam em `asset.adm.*` devem ser lidos de `asset.propiedades[]
 | Oportunidade | `oportunidades` | Match com score |
 | Oferta | `ofertas` | Proposta + estados NDA |
 | Notificacion | `notificaciones` | Alertas in-app (+ email espelhado) |
-| Nota | `notas` | `scope`: `activo` (Características; cada agente vê as suas, admin todas) ou `privada` (só admin). `author_id` = quem criou. «Mis notas» do portal leva `comprador_id`. DELETE só admin |
+| Nota | `notas` | `scope`: `activo` (Características; cada agente vê as suas, admin todas) ou `privada` (só admin). `author_id` e `author_role` = quem criou. Na UI, rol `admin` lê-se «Gestor». «Mis notas» do portal leva `comprador_id`. DELETE só admin |
+| Comentário do comprador | `comprador_comentarios` | Chamadas e ações na ficha do comprador. Admin vê tudo. O agente só o comprador que gere (`vendedor_compradores`) |
 
 Tabelas de relação: `comprador_assets` (convites), `comprador_favoritos`, `vendedor_permissions`, `vendedor_assets`, `vendedor_compradores`.
 
@@ -94,6 +95,7 @@ Todo acesso DB passa por [`src/lib/supabase/db.ts`](../../src/lib/supabase/db.ts
 | `supabase-dev-policies.sql` | RLS permissivo para dev (notas: select/insert; sem delete) |
 | `supabase/migrations/20261109_notas_admin_delete.sql` | Política DELETE de notas só admin |
 | `supabase/migrations/20261109_notas_select_visibilidad.sql` | SELECT: agente só as suas; comprador só as suas; privadas só via admin |
+| `supabase/migrations/20261119_comentarios_autor_y_actividad.sql` | `author_role` em notas, autor da informação adicional e do comentário da oferta, tabela `comprador_comentarios` |
 
 Ver [migrations-supabase.md](../operacoes/migrations-supabase.md).
 

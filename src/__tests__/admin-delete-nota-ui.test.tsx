@@ -25,7 +25,28 @@ describe("AssetNoteCard", () => {
 
     expect(screen.getByText("Hipoteca no reflejada en el sistema")).toBeVisible();
     expect(screen.getByText("Ana Admin")).toBeVisible();
+    expect(screen.getByTestId("comentario-meta").textContent).toMatch(/:/);
     expect(screen.queryByRole("button", { name: "Borrar nota" })).not.toBeInTheDocument();
+  });
+
+  it("el admin se muestra como Gestor, con fecha y hora, y no con su nombre", () => {
+    render(
+      <AssetNoteCard
+        note={{ ...note, author: "Modesto Manzano", author_role: "admin" }}
+      />,
+    );
+
+    expect(screen.getByText("Gestor")).toBeVisible();
+    expect(screen.queryByText("Modesto Manzano")).not.toBeInTheDocument();
+    expect(screen.getByTestId("comentario-meta").textContent).toMatch(/2026/);
+    expect(screen.getByTestId("comentario-meta").textContent).toMatch(/:/);
+  });
+
+  it("una nota sin autor muestra Gestor y la fecha", () => {
+    render(<AssetNoteCard note={{ ...note, author: "  ", author_role: null }} />);
+
+    expect(screen.getByText("Gestor")).toBeVisible();
+    expect(screen.getByTestId("comentario-meta").textContent).toMatch(/:/);
   });
 
   it("el admin cancela la confirmación y la nota sigue", async () => {
