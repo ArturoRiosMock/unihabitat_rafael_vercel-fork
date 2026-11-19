@@ -82,7 +82,7 @@ function PortalPropertyCardSkeleton() {
 
 function PortalContent() {
   const { assets, assetsLoading, assetsError } = useApp();
-  const { sensitiveVisible, isStaff, userResolved } = usePortalAuth();
+  const { sensitiveVisible, isStaff, userResolved, role } = usePortalAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const catalogAssets = useMemo(
@@ -199,7 +199,7 @@ function PortalContent() {
       const propBlob = a.propiedades.map((p) => [
         p.activoId, p.categoria, p.idPrinex, p.idProperty, p.collateralId,
         p.mainLocalCcc14, p.portfolio,
-        ...(sensitiveVisible ? [p.propietario] : []),
+        ...(role === "admin" ? [p.propietario, p.contacto] : []),
       ].join(" ")).join(" ");
       const searchable = [
         a.id, a.pob, a.prov, a.cp, a.ccaa,
@@ -219,7 +219,7 @@ function PortalContent() {
     else if (sortBy === "pob_az") result.sort((a, b) => (a.pob || "").localeCompare(b.pob || ""));
 
     return result;
-  }, [catalogAssets, q, fCat, fProv, fPob, fTipo, sortBy, sensitiveVisible]);
+  }, [catalogAssets, q, fCat, fProv, fPob, fTipo, sortBy, role]);
 
   const suspendedMatchCount = useMemo(() => {
     if (isStaff || filtered.length > 0) return 0;

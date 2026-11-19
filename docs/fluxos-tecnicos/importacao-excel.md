@@ -46,6 +46,7 @@ Alias tolerantes a acentos e variantes (`CORE_HEADERS`):
 
 - `Referencia`, `ID1`, `Categoria`
 - `Propietario`, `Contacto`, `Telefono`, `mail`
+- Formato antigo: uma coluna `Propietario / Vendedor` (ou `Propietario/Vendedor`) enche `propietario` e deixa `contacto` vazio. Se a folha traz as duas colunas novas, essas ganham.
 - `Provincia`, `Municipio`, `Codigo Postal`, `Direccion Completa`
 - `Bien`, `Clase`, `Uso`, `Precio`, `Deuda`, `Publicar`
 - `Longitud`, `Latitud`, `Descripcion Activo`

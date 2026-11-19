@@ -1,4 +1,9 @@
 import { isEmptyExcelCell } from "@/lib/excel-raw-utils";
+import {
+  CONTACTO_HEADER_ALIASES,
+  PROPIETARIO_HEADER_ALIASES,
+  isBlankOwnerValue,
+} from "@/lib/propietario-contacto";
 import { parseLocaleMoneyInput } from "@/lib/utils";
 
 /**
@@ -8,6 +13,8 @@ import { parseLocaleMoneyInput } from "@/lib/utils";
  */
 const DEUDA_ALIASES = ["DEUDA", "PRECIO DE LA DEUDA", "PRECIO DEUDA"];
 const PROCESO_ALIASES = ["PROCESO"];
+const TELEFONO_ALIASES = ["TELEFONO"];
+const MAIL_ALIASES = ["MAIL", "EMAIL", "E-MAIL"];
 
 export interface CanonicalField<T> {
   /** Había una cabecera reconocible en alguna hoja. */
@@ -18,6 +25,10 @@ export interface CanonicalField<T> {
 export interface CanonicalProjection {
   deuda: CanonicalField<number | null>;
   proceso: CanonicalField<string>;
+  propietario: CanonicalField<string>;
+  contacto: CanonicalField<string>;
+  telefono: CanonicalField<string>;
+  mail: CanonicalField<string>;
 }
 
 /** Misma normalización de cabeceras que el import (sin acentos, mayúsculas). */
@@ -30,6 +41,9 @@ export function foldHeader(value: string): string {
     .toUpperCase()
     .trim();
 }
+
+const PROPIETARIO_ALIASES = PROPIETARIO_HEADER_ALIASES.map(foldHeader);
+const CONTACTO_ALIASES = CONTACTO_HEADER_ALIASES.map(foldHeader);
 
 function findAlias(
   excelRaw: Record<string, Record<string, string>>,
@@ -47,10 +61,16 @@ function findAlias(
   return { present: false, raw: "" };
 }
 
+function ownerText(found: { present: boolean; raw: string }): CanonicalField<string> {
+  if (!found.present) return { present: false, value: "—" };
+  const text = found.raw.trim();
+  return { present: true, value: isBlankOwnerValue(text) ? "—" : text };
+}
+
 /**
- * Lee Deuda y Proceso desde el blob `excel_raw`.
+ * Lee Deuda, Proceso, Propietario y Contacto desde el blob `excel_raw`.
  * Si la cabecera no está, `present` es false y no hay que tocar la columna.
- * Si está vacía, el valor canónico queda vacío (deuda null, proceso «—»).
+ * Si está vacía, el valor canónico queda vacío (deuda null, texto «—»).
  */
 export function canonicalFieldsFromExcelRaw(
   excelRaw: Record<string, Record<string, string>>,
@@ -67,16 +87,38 @@ export function canonicalFieldsFromExcelRaw(
       present: proceso.present,
       value: proceso.present ? (procesoText || "—") : "—",
     },
+    propietario: ownerText(findAlias(excelRaw, PROPIETARIO_ALIASES)),
+    contacto: ownerText(findAlias(excelRaw, CONTACTO_ALIASES)),
+    telefono: ownerText(findAlias(excelRaw, TELEFONO_ALIASES)),
+    mail: ownerText(findAlias(excelRaw, MAIL_ALIASES)),
   };
 }
 
 /** Columnas de `propiedades` que hay que actualizar junto con `excel_raw`. */
 export function propiedadPatchFromExcelRaw(
   excelRaw: Record<string, Record<string, string>>,
-): { deuda?: number | null; proceso?: string } {
+): {
+  deuda?: number | null;
+  proceso?: string;
+  propietario?: string;
+  contacto?: string;
+  telefono?: string;
+  mail?: string;
+} {
   const canonical = canonicalFieldsFromExcelRaw(excelRaw);
-  const patch: { deuda?: number | null; proceso?: string } = {};
+  const patch: {
+    deuda?: number | null;
+    proceso?: string;
+    propietario?: string;
+    contacto?: string;
+    telefono?: string;
+    mail?: string;
+  } = {};
   if (canonical.deuda.present) patch.deuda = canonical.deuda.value;
   if (canonical.proceso.present) patch.proceso = canonical.proceso.value;
+  if (canonical.propietario.present) patch.propietario = canonical.propietario.value;
+  if (canonical.contacto.present) patch.contacto = canonical.contacto.value;
+  if (canonical.telefono.present) patch.telefono = canonical.telefono.value;
+  if (canonical.mail.present) patch.mail = canonical.mail.value;
   return patch;
 }

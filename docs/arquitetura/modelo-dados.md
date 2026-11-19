@@ -31,6 +31,7 @@ erDiagram
     string categoria "CDR ou NPL"
     number deuda
     string propietario
+    string contacto
   }
   Comprador ||--o{ Oportunidade : "match"
   Asset ||--o{ Oportunidade : "match"
@@ -52,7 +53,7 @@ Campos principais em [`src/lib/types.ts`](../../src/lib/types.ts):
 
 - **Ligação:** `inmuebleId` → `Asset.id`, `activoId` → coluna Excel `ID1`
 - **Categoria:** `CDR` | `NPL` — determina colunas extra no parser
-- **Comercial/judicial:** `propietario`, `deuda`, `faseInterna`, `proceso`, `portfolio`, etc.
+- **Comercial/judicial:** `propietario`, `contacto`, `telefono`, `mail`, `deuda`, `faseInterna`, `proceso`, `portfolio`, etc. Propietario e contacto só saem nas leituras de admin (`fetchPropiedades`, ficha Administrador). Agente, comprador e portal recebem «—» e sem `excelRaw`.
 - **Deuda e Proceso** na ficha: colunas `propiedades.deuda` e `propiedades.proceso`. Características só lê. Administrador escreve (a folha `excel_raw` projecta essas células ao gravar). Listado, portal NPL e export Excel usam os mesmos accessors.
 - **Situación** na UI (ficha admin Características, ficha pública Características e portal privado Información completa) é `faseInterna` da primeira propiedad. Coluna `propiedades.fase_interna` (já existe; sem migração nova). Carga Excel: cabeçalho **Fase Interna**, com alias **Situación**. Export admin: coluna **Situación**.
 - **Auditoria:** `excelRaw` — linha original por folha/cabeçalho

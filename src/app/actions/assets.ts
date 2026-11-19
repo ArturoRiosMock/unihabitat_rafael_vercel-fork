@@ -4,20 +4,26 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import {
   rowToAsset, rowToAssetPublic, assetToRow,
   rowToPropiedad, rowToPropiedadPublic, propiedadToRow,
-  mergeExcelRawMaps,
+  mergeExcelRawMaps, PROPIEDAD_PUBLIC_SELECT,
 } from "@/lib/supabase/db";
 import type { Asset, Propiedad } from "@/lib/types";
 import { buildStaticMapUrl } from "@/lib/catastro/geoapify";
 import {
-  requireAdmin, requireAdminOrVendor, requireEditPermission, requireAssetAccess,
+  getServerSession, requireAdmin, requireAdminOrVendor, requireEditPermission, requireAssetAccess,
 } from "@/lib/auth-server";
 import { buildPublicSlug } from "@/lib/public-slug";
 import { isMissingPublishedAtColumn } from "@/lib/asset-publication";
 import { propiedadPatchFromExcelRaw } from "@/lib/propiedad-canonical";
+import { applyOwnerFieldsToExcelRaw, touchesPropiedadPii } from "@/lib/propietario-contacto";
 
 // PostgREST aplica `db-max-rows = 1000` por request; paginamos manualmente.
 const POSTGREST_PAGE_SIZE = 1000;
 const MAX_PAGES = 100;
+
+async function sessionCanReadPropiedadPii(): Promise<boolean> {
+  const session = await getServerSession();
+  return session?.role === "admin";
+}
 
 async function fetchAllPaginated<Row>(
   label: string,
@@ -68,7 +74,7 @@ export async function fetchPublicAssets(): Promise<Asset[]> {
   for (let i = 0; i < ids.length; i += POSTGREST_PAGE_SIZE) {
     const slice = ids.slice(i, i + POSTGREST_PAGE_SIZE);
     const { data, error } = await supabase
-      .from("propiedades").select("*").in("inmueble_id", slice);
+      .from("propiedades").select(PROPIEDAD_PUBLIC_SELECT).in("inmueble_id", slice);
     if (error) throw new Error(error.message);
     if (data) propsCollected.push(...data);
   }
@@ -133,7 +139,7 @@ export async function fetchPublicAssetsByActivoId(activoId: string): Promise<Ass
   const propsCollected: any[] = [];
   for (let i = 0; i < ids.length; i += POSTGREST_PAGE_SIZE) {
     const slice = ids.slice(i, i + POSTGREST_PAGE_SIZE);
-    const { data, error } = await supabase.from("propiedades").select("*").in("inmueble_id", slice);
+    const { data, error } = await supabase.from("propiedades").select(PROPIEDAD_PUBLIC_SELECT).in("inmueble_id", slice);
     if (error) throw new Error(error.message);
     if (data) propsCollected.push(...data);
   }
@@ -156,7 +162,7 @@ export async function fetchAssetById(id: string): Promise<Asset | null> {
   if (!data) return null;
   const asset = rowToAssetPublic(data);
   const { data: props, error: pErr } = await supabase
-    .from("propiedades").select("*").eq("inmueble_id", id);
+    .from("propiedades").select(PROPIEDAD_PUBLIC_SELECT).eq("inmueble_id", id);
   if (pErr) throw new Error(pErr.message);
   asset.propiedades = (props ?? []).map(rowToPropiedadPublic);
   return asset;
@@ -170,7 +176,8 @@ export async function fetchAssetById(id: string): Promise<Asset | null> {
 export async function fetchAssetsByActivoIdForAdmin(activoId: string, excludeId?: string): Promise<Asset[]> {
   const key = activoId?.trim();
   if (!key || key === "—") return [];
-  await requireAdminOrVendor();
+  const session = await requireAdminOrVendor();
+  const readPii = session.role === "admin";
   const supabase = await createServiceClient();
 
   const { data: propRows, error: propErr } = await supabase
@@ -210,7 +217,7 @@ export async function fetchAssetsByActivoIdForAdmin(activoId: string, excludeId?
   }
   const byInmueble = new Map<string, ReturnType<typeof rowToPropiedad>[]>();
   for (const row of propsCollected) {
-    const p = rowToPropiedad(row);
+    const p = readPii ? rowToPropiedad(row) : rowToPropiedadPublic(row);
     const list = byInmueble.get(p.inmuebleId);
     if (list) list.push(p);
     else byInmueble.set(p.inmuebleId, [p]);
@@ -230,7 +237,7 @@ export async function fetchAssetByPublicSlug(slug: string): Promise<Asset | null
   if (!data) return null;
   const asset = rowToAssetPublic(data);
   const { data: props, error: pErr } = await supabase
-    .from("propiedades").select("*").eq("inmueble_id", asset.id);
+    .from("propiedades").select(PROPIEDAD_PUBLIC_SELECT).eq("inmueble_id", asset.id);
   if (pErr) throw new Error(pErr.message);
   asset.propiedades = (props ?? []).map(rowToPropiedadPublic);
   return asset;
@@ -285,7 +292,8 @@ export async function fetchAssetByIdForAdmin(id: string): Promise<Asset | null> 
   const { data: props, error: pErr } = await supabase
     .from("propiedades").select("*").eq("inmueble_id", id);
   if (pErr) throw new Error(pErr.message);
-  asset.propiedades = (props ?? []).map(rowToPropiedad);
+  const mapRow = session.role === "admin" ? rowToPropiedad : rowToPropiedadPublic;
+  asset.propiedades = (props ?? []).map(mapRow);
   return asset;
 }
 
@@ -299,14 +307,15 @@ export async function fetchPropiedades(): Promise<Propiedad[]> {
   const rows = await fetchAllPaginated<any>("fetchPropiedades", () =>
     supabase.from("propiedades").select("*").order("created_at", { ascending: false }),
   );
-  return rows.map(rowToPropiedad);
+  const readPii = await sessionCanReadPropiedadPii();
+  return rows.map(readPii ? rowToPropiedad : rowToPropiedadPublic);
 }
 
 export async function fetchPropiedadesPublic(): Promise<Propiedad[]> {
   const supabase = await createClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rows = await fetchAllPaginated<any>("fetchPropiedadesPublic", () =>
-    supabase.from("propiedades").select("*"),
+    supabase.from("propiedades").select(PROPIEDAD_PUBLIC_SELECT),
   );
   return rows.map(rowToPropiedadPublic);
 }
@@ -323,7 +332,8 @@ export async function fetchPropiedadesByInmuebleIds(ids: string[]): Promise<Prop
     if (error) throw new Error(error.message);
     if (data) collected.push(...data);
   }
-  return collected.map(rowToPropiedad);
+  const readPii = await sessionCanReadPropiedadPii();
+  return collected.map(readPii ? rowToPropiedad : rowToPropiedadPublic);
 }
 
 /* ------------------------------------------------------------------ */
@@ -641,9 +651,28 @@ export async function updatePropiedadFields(
   fields: Record<string, string | number | null>,
 ): Promise<void> {
   if (!propiedadId || Object.keys(fields).length === 0) return;
-  await requireEditPermission("activos");
+  const ownerWrite = touchesPropiedadPii(fields);
+  if (ownerWrite) await requireAdmin();
+  else await requireEditPermission("activos");
   const supabase = await createServiceClient();
-  const { error } = await supabase.from("propiedades").update(fields).eq("id", propiedadId);
+
+  const payload: Record<string, unknown> = { ...fields };
+  if (ownerWrite) {
+    const { data, error: readErr } = await supabase
+      .from("propiedades")
+      .select("excel_raw")
+      .eq("id", propiedadId)
+      .maybeSingle();
+    if (readErr) throw new Error(readErr.message);
+    const excelRaw = data?.excel_raw as Record<string, Record<string, string>> | null | undefined;
+    const patched = applyOwnerFieldsToExcelRaw(excelRaw, {
+      propietario: typeof fields.propietario === "string" ? fields.propietario : undefined,
+      contacto: typeof fields.contacto === "string" ? fields.contacto : undefined,
+    });
+    if (patched) payload.excel_raw = patched;
+  }
+
+  const { error } = await supabase.from("propiedades").update(payload).eq("id", propiedadId);
   if (error) throw new Error(error.message);
 }
 

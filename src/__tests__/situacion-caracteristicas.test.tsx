@@ -564,3 +564,52 @@ describe("firmas del NDA en la ficha", () => {
     expect(await screen.findByText("Lucía Agent")).toBeVisible();
   });
 });
+
+describe("Propietario, contacto y notas privadas", () => {
+  beforeEach(() => {
+    mocks.session.role = "admin";
+    mocks.updatePropiedadFields.mockClear();
+    currentAsset = makeAsset("Disponible");
+    currentAsset.propiedades[0].propietario = "Ana López";
+    currentAsset.propiedades[0].contacto = "Luis Gómez";
+    currentAsset.propiedades[0].telefono = "600111222";
+    currentAsset.propiedades[0].mail = "ana@example.com";
+  });
+
+  it("en Administrador hay dos campos y se guardan sin perder teléfono ni email", async () => {
+    const user = userEvent.setup();
+    renderFicha();
+
+    await user.click(await screen.findByRole("button", { name: "Administrador" }));
+
+    expect(screen.getByRole("textbox", { name: "Propietario" })).toHaveValue("Ana López");
+    expect(screen.getByRole("textbox", { name: "Contacto" })).toHaveValue("Luis Gómez");
+    expect(screen.getByText("600111222")).toBeVisible();
+    expect(screen.getByText("ana@example.com")).toBeVisible();
+    expect(screen.getByText("Notas privadas")).toBeVisible();
+    expect(screen.queryByRole("textbox", { name: "Nombre" })).not.toBeInTheDocument();
+
+    await user.clear(screen.getByRole("textbox", { name: "Contacto" }));
+    await user.type(screen.getByRole("textbox", { name: "Contacto" }), "Nuria Soler");
+    await user.click(screen.getByRole("button", { name: "Guardar propietario" }));
+
+    expect(mocks.updatePropiedadFields).toHaveBeenCalledWith("PROP-1", {
+      propietario: "Ana López",
+      contacto: "Nuria Soler",
+    });
+  });
+
+  it("el agente no ve propietario, contacto ni notas privadas", async () => {
+    mocks.session.role = "vendedor";
+    renderFicha();
+
+    expect(await screen.findByText("Calle Mayor 1")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Administrador" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Propietario" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Contacto" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Ana López")).not.toBeInTheDocument();
+    expect(screen.queryByText("Luis Gómez")).not.toBeInTheDocument();
+    expect(screen.queryByText("Notas privadas")).not.toBeInTheDocument();
+    expect(screen.queryByText("600111222")).not.toBeInTheDocument();
+  });
+});

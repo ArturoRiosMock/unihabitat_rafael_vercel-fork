@@ -16,6 +16,7 @@
 import * as XLSX from "xlsx";
 import type { Asset, Propiedad } from "./types";
 import { faseToCode } from "./fase-interna";
+import { CONTACTO_HEADER_ALIASES, PROPIETARIO_HEADER_ALIASES } from "./propietario-contacto";
 
 export interface ParseTemplateResult {
   inmuebles: Asset[];
@@ -161,8 +162,8 @@ function isNplCategoria(categoria: string): boolean {
 
 /** Alias por campo para encontrar la columna en la cabecera. */
 const CORE_HEADERS = {
-  propietario: ["Propietario"],
-  contacto: ["Contacto"],
+  propietario: [...PROPIETARIO_HEADER_ALIASES],
+  contacto: [...CONTACTO_HEADER_ALIASES],
   telefono: ["Telefono", "Teléfono"],
   mail: ["mail", "Mail", "Email", "E-mail"],
   publicar: ["Publicar"],

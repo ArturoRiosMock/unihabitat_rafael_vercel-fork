@@ -67,6 +67,16 @@ Na ficha `/admin/assets/[id]`, separador **Características**, coluna direita (p
 - **Agente:** só leitura, mesmo que possa editar outros campos da ficha.
 - Vazio, espaços ou «—» → **—**. Sem propriedade associada, o admin também vê **—** (não há fila para gravar).
 
+## Propietario e contacto
+
+Na ficha, separador **Administrador** (só admin), quadro **Propietario / Vendedor (primera propiedad)**:
+
+- Dois campos editáveis da primeira carga: **Propietario** e **Contacto**. Já não há um único campo «Nombre».
+- **Teléfono** e **Email** continuam na mesma fila, só leitura neste quadro.
+- A carga Excel nova usa as colunas `Propietario` e `Contacto`. A antiga, com `Propietario / Vendedor`, enche só Propietario.
+- A descarga Excel de `/admin` inclui as colunas Propietario e Contacto. No agente saem vazias.
+- Agente e comprador não recebem estes dados nas server actions. A migração `supabase/migrations/20261119e_propietario_contacto.sql` tira o SELECT dessas colunas (e de `excel_raw`) a `anon` e `authenticated`.
+
 ## Propiedades (cargas)
 
 Tab admin mostra propiedades ligadas — dados de devedor, dívida, fase judicial, `excelRaw` editável.
@@ -91,7 +101,7 @@ SQL idempotente do NDA: `supabase/migrations/20261119b_nda_aceptaciones_activo.s
 |--------|----------------|---------|
 | Características → **Notas del activo** | Admin e agente (`scope = activo`) | O agente só as que ele criou. O admin vê todas. Autor e data/hora. Admin aparece como **Gestor**. |
 | Agentes → **Notas del agente** | Admin (a pestana é só admin) | O admin vê as notas de activo de todos os agentes. Um agente, se consultasse a action, só receberia as suas. |
-| Administrador → **Notas privadas** | Só admin (`scope = privada`) | Só admin. Não aparecem em Características nem para agentes. |
+| Administrador → **Notas privadas** | Só admin (`scope = privada`) | Só admin. Não aparecem em Características nem para agentes. A UI está só em `TabAdmin` (`adminOnly`). `fetchNotas` devolve lista vazia ao agente se `scope = privada`. As políticas `notas_agente_select` e `notas_comprador_select` exigem `scope = 'activo'` (`supabase/migrations/20261109_notas_select_visibilidad.sql`). |
 | Portal → **Mis notas** | O comprador | Só esse comprador (e o admin, se pedir por `compradorId`). |
 
 A regra está na server action `fetchNotas` / `createNota` e nas políticas SELECT. Não chega esconder a linha no ecrã.

@@ -21,7 +21,7 @@ Colunas obrigatórias mínimas:
 - **`ID1`** — agrupador de propiedades do mesmo activo/préstamo
 - **`Categoria`** — `CDR` ou `NPL`
 
-Outras colunas comuns: Propietario, Provincia, Municipio, Precio, Deuda, Publicar, Bien, Dirección Completa, Latitud, Longitud.
+Outras colunas comuns: Propietario, Contacto, Provincia, Municipio, Precio, Deuda, Publicar, Bien, Dirección Completa, Latitud, Longitud. Uma folha antiga só com `Propietario / Vendedor` continua a carregar: o nome vai para Propietario e Contacto fica vazio.
 
 **Não são aceites** formatos antigos de múltiplos proveedores (Proveedor 1/2/3).
 

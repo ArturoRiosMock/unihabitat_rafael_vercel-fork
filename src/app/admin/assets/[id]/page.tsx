@@ -29,9 +29,10 @@ import { EditableExcelRawSection } from "@/components/EditableExcelRawSection";
 import { listEmptyExcelFields } from "@/lib/excel-raw-utils";
 import { FASE_INTERNA_OPTIONS, faseToCode } from "@/lib/fase-interna";
 import {
-  getDescriptionText, getCategoria, getFaseInterna, getPropietario, getOwnerTel,
+  getDescriptionText, getCategoria, getFaseInterna, getOwnerTel,
   getOwnerMail, getDeudaTotal, fmt, parseLocaleMoneyInput,
 } from "@/lib/utils";
+import { isBlankOwnerValue } from "@/lib/propietario-contacto";
 import { toast } from "@/lib/toast";
 import { datosFirmaCompletos, datosFirmaFromComprador, datosFirmaVacios, nombreVisible, type DatosFirma } from "@/lib/comprador-oferta";
 import { OfertaDatosComprador } from "@/components/OfertaDatosComprador";
@@ -1403,24 +1404,36 @@ function TabClientes({ assetId }: { assetId: string }) {
   );
 }
 
+function ownerFieldValue(value: string | undefined): string {
+  if (isBlankOwnerValue(value)) return "";
+  return value?.trim() ?? "";
+}
+
 function TabAdmin({ asset, assetId, togglePub, currentUser, reloadAsset, canDeleteNotes }: { asset: Asset; assetId: string; togglePub: () => void; currentUser: { nombre: string; email: string } | null; reloadAsset: () => void; canDeleteNotes: boolean }) {
   const [adminNote, setAdminNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [savingFase, setSavingFase] = useState(false);
+  const [savingOwner, setSavingOwner] = useState(false);
   const [notes, setNotes] = useState<NotaRow[]>([]);
   const [loadingNotes, setLoadingNotes] = useState(true);
   const [faseInterna, setFaseInterna] = useState(getFaseInterna(asset));
+  const [propietario, setPropietario] = useState("");
+  const [contacto, setContacto] = useState("");
 
   useEffect(() => {
     setFaseInterna(getFaseInterna(asset));
   }, [asset]);
 
-  // El propietario vive en la PROPIEDAD (lien) — no en el inmueble. Mostramos
-  // los datos de la primera propiedad asociada como referencia. La edición
-  // por propiedad se hará desde su panel propio en una iteración futura.
-  const ownerName = getPropietario(asset);
+  // Propietario y contacto viven en la primera propiedad (lien), no en el inmueble.
   const ownerTel = getOwnerTel(asset);
   const ownerMail = getOwnerMail(asset);
+  const ownerPropiedadId = asset.propiedades[0]?.id ?? "";
+
+  useEffect(() => {
+    const first = asset.propiedades[0];
+    setPropietario(ownerFieldValue(first?.propietario));
+    setContacto(ownerFieldValue(first?.contacto));
+  }, [asset]);
 
   useEffect(() => {
     loadAdminNotes();
@@ -1549,23 +1562,64 @@ function TabAdmin({ asset, assetId, togglePub, currentUser, reloadAsset, canDele
         </SectionCard>
         <SectionCard title="Propietario / Vendedor (primera propiedad)">
           <p className="mb-2 text-[10px] text-muted">
-            Datos derivados de la primera carga/propiedad asociada al inmueble.
-            La edición por propiedad se hará desde su propio panel.
+            Solo administración. Propietario y contacto son dos campos de la primera carga.
+            Teléfono y email siguen asociados a esa misma fila.
           </p>
           <div className="mb-3 grid grid-cols-2 gap-2">
             <div className="flex flex-col gap-0.5">
-              <label className="text-[9px] font-semibold uppercase tracking-wider text-muted">Nombre</label>
-              <div className="rounded-md border border-border bg-cream2 px-2.5 py-[7px] text-xs text-text">{ownerName}</div>
+              <label htmlFor="activo-propietario" className="text-[9px] font-semibold uppercase tracking-wider text-muted">Propietario</label>
+              <input
+                id="activo-propietario"
+                value={propietario}
+                disabled={!ownerPropiedadId || savingOwner}
+                onChange={(e) => setPropietario(e.target.value)}
+                className="rounded-md border border-border bg-cream2 px-2.5 py-[7px] text-xs text-text outline-none focus:border-navy disabled:opacity-50"
+              />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <label htmlFor="activo-contacto" className="text-[9px] font-semibold uppercase tracking-wider text-muted">Contacto</label>
+              <input
+                id="activo-contacto"
+                value={contacto}
+                disabled={!ownerPropiedadId || savingOwner}
+                onChange={(e) => setContacto(e.target.value)}
+                className="rounded-md border border-border bg-cream2 px-2.5 py-[7px] text-xs text-text outline-none focus:border-navy disabled:opacity-50"
+              />
             </div>
             <div className="flex flex-col gap-0.5">
               <label className="text-[9px] font-semibold uppercase tracking-wider text-muted">Teléfono</label>
               <div className="rounded-md border border-border bg-cream2 px-2.5 py-[7px] text-xs text-text">{ownerTel}</div>
             </div>
-            <div className="col-span-2 flex flex-col gap-0.5">
+            <div className="flex flex-col gap-0.5">
               <label className="text-[9px] font-semibold uppercase tracking-wider text-muted">Email</label>
               <div className="rounded-md border border-border bg-cream2 px-2.5 py-[7px] text-xs text-text">{ownerMail}</div>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={async () => {
+              if (!ownerPropiedadId) return;
+              setSavingOwner(true);
+              try {
+                await updatePropiedadFields(ownerPropiedadId, {
+                  propietario: propietario.trim() || "—",
+                  contacto: contacto.trim() || "—",
+                });
+                reloadAsset();
+                toast.success("Propietario y contacto guardados");
+              } catch (err) {
+                toast.error("No se pudo guardar el propietario", {
+                  description: err instanceof Error ? err.message : String(err),
+                });
+              } finally {
+                setSavingOwner(false);
+              }
+            }}
+            disabled={!ownerPropiedadId || savingOwner}
+            className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-md border border-border px-4 py-2 text-xs font-medium text-navy hover:bg-cream disabled:opacity-50"
+          >
+            {savingOwner ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Guardar propietario
+          </button>
           {ownerMail && ownerMail !== "—" && (
             <a
               href={`mailto:${ownerMail}`}

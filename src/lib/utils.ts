@@ -42,6 +42,10 @@ export function getFaseC(a: AssetLike): string {
 export function getPropietario(a: AssetLike): string {
   return a.propiedades?.[0]?.propietario ?? "—";
 }
+/** Persona de contacto de la primera propiedad. */
+export function getContacto(a: AssetLike): string {
+  return a.propiedades?.[0]?.contacto ?? "—";
+}
 /** Teléfono del propietario. */
 export function getOwnerTel(a: AssetLike): string {
   return a.propiedades?.[0]?.telefono ?? "—";

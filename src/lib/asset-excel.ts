@@ -5,7 +5,7 @@ import {
   formatPublicationDateTime,
   publicationFileDate,
 } from "@/lib/asset-publication";
-import { displayAssetAddress, getActivoId, getCategoria, getDeudaTotal, getFaseInterna, getProceso } from "@/lib/utils";
+import { displayAssetAddress, getActivoId, getCategoria, getContacto, getDeudaTotal, getFaseInterna, getProceso, getPropietario } from "@/lib/utils";
 
 export interface AssetExcelRow {
   ID: string;
@@ -22,6 +22,8 @@ export interface AssetExcelRow {
   Deuda: number | null;
   Situación: string;
   Proceso: string;
+  Propietario: string;
+  Contacto: string;
   Publicado: "Sí" | "No";
   "Fecha de publicación": string;
   "Fecha de lanzamiento": string;
@@ -81,6 +83,8 @@ export function assetsToExcelRows(assets: readonly Asset[]): AssetExcelRow[] {
     Deuda: getDeudaTotal(asset),
     Situación: cellText(getFaseInterna(asset)),
     Proceso: cellText(getProceso(asset)),
+    Propietario: cellText(getPropietario(asset)),
+    Contacto: cellText(getContacto(asset)),
     Publicado: asset.pub ? "Sí" : "No",
     "Fecha de publicación": formatPublicationDateTime(effectivePublishedAt(asset)),
     "Fecha de lanzamiento": launchDate(asset),
@@ -94,6 +98,7 @@ export function buildAssetsWorkbook(assets: readonly Asset[]): XLSX.WorkBook {
     { wch: 28 }, { wch: 24 }, { wch: 16 }, { wch: 14 },
     { wch: 16 }, { wch: 18 }, { wch: 8 }, { wch: 36 }, { wch: 14 },
     { wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 18 }, { wch: 18 },
+    { wch: 22 }, { wch: 22 },
     { wch: 12 }, { wch: 20 }, { wch: 20 },
   ];
   if (sheet["!ref"]) sheet["!autofilter"] = { ref: sheet["!ref"] };

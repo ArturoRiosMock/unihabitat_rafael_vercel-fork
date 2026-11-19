@@ -17,6 +17,7 @@ import { isAdmin } from "@/lib/auth-helpers";
 import { getCategoria, getFaseInterna, getFaseC, getActivoId } from "@/lib/utils";
 import { compareByPublicationDate, publicationListLabel } from "@/lib/asset-publication";
 import { downloadAssetsWorkbook, resolveAssetsForExport } from "@/lib/asset-excel";
+import { stripPropiedadPii } from "@/lib/supabase/db";
 import { toast } from "@/lib/toast";
 
 type SortCol = "prov" | "pob" | "sqm" | "precio" | "cat" | "addr" | "cp" | "tip" | "fase" | "proceso" | "deuda" | "pub" | "publishedAt";
@@ -109,7 +110,8 @@ export default function ActivosPage() {
       if (q) {
         const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
         const propBlob = a.propiedades.map((p) => [
-          p.id, p.activoId, p.categoria, p.propietario, p.contacto,
+          p.id, p.activoId, p.categoria,
+          ...(userIsAdmin ? [p.propietario, p.contacto, p.telefono, p.mail] : []),
           p.faseInterna, p.proceso, p.collateralId, p.idPrinex, p.idProperty,
           p.mainLocalCcc14, p.portfolio, p.folder,
         ].join(" ")).join(" ");
@@ -147,7 +149,7 @@ export default function ActivosPage() {
       return 0;
     });
     return res;
-  }, [assets, q, fCat, fProv, fPob, fTipo, fEstado, fFase, fProceso, fDeuda, favOnly, sortCol, sortDir]);
+  }, [assets, q, fCat, fProv, fPob, fTipo, fEstado, fFase, fProceso, fDeuda, favOnly, sortCol, sortDir, userIsAdmin]);
 
   // Reinicia a la página 1 cuando cambian filtros, búsqueda, orden o pageSize:
   // evita quedar "atrapado" en página 5 tras filtrar a 3 resultados.
@@ -209,7 +211,13 @@ export default function ActivosPage() {
 
   const handleDownloadExcel = () => {
     if (exportSelection.assets.length === 0) return;
-    downloadAssetsWorkbook(exportSelection.assets);
+    const rows = userIsAdmin
+      ? exportSelection.assets
+      : exportSelection.assets.map((asset) => ({
+          ...asset,
+          propiedades: asset.propiedades.map(stripPropiedadPii),
+        }));
+    downloadAssetsWorkbook(rows);
   };
 
   const handleDeleteSelected = async () => {

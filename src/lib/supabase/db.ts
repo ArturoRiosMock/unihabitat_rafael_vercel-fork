@@ -139,11 +139,12 @@ export function rowToPropiedad(r: any): Propiedad {
   };
 }
 
-/** Versión pública sin PII del propietario del préstamo. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function rowToPropiedadPublic(r: any): Propiedad {
-  const full = rowToPropiedad(r);
-  const { excelRaw: _excelRaw, ...rest } = full;
+/**
+ * Quita propietario, contacto, teléfono, email y el excel en bruto.
+ * Agente, comprador y portal reciben esta forma.
+ */
+export function stripPropiedadPii(p: Propiedad): Propiedad {
+  const { excelRaw: _excelRaw, ...rest } = p;
   return {
     ...rest,
     propietario: "—",
@@ -152,6 +153,52 @@ export function rowToPropiedadPublic(r: any): Propiedad {
     mail: "—",
   };
 }
+
+/** Versión pública sin PII del propietario del préstamo. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function rowToPropiedadPublic(r: any): Propiedad {
+  return stripPropiedadPii(rowToPropiedad(r));
+}
+
+/**
+ * Columnas que anon/authenticated pueden leer tras la migración
+ * 20261119e. No incluye propietario, contacto, teléfono, email ni excel_raw.
+ */
+export const PROPIEDAD_PUBLIC_SELECT = [
+  "id",
+  "inmueble_id",
+  "activo_id",
+  "categoria",
+  "fase_interna",
+  "fase_c",
+  "proceso",
+  "deuda",
+  "precio_publicacion",
+  "lien",
+  "collateral_id",
+  "id_prinex",
+  "id_prinex_corto",
+  "id_property",
+  "data_ref",
+  "portfolio",
+  "folder",
+  "main_local_ccc14",
+  "stage_status",
+  "stage_substatus",
+  "tipologia",
+  "juzgado_larga",
+  "codigo_procedimiento",
+  "ultima_fase_calculada",
+  "hito_judicial",
+  "fecha_lanzamiento",
+  "lanzamiento",
+  "info_ocupantes",
+  "inscrito",
+  "cargas",
+  "registralmente_ok",
+  "created_at",
+  "updated_at",
+].join(",");
 
 export function propiedadToRow(p: Propiedad) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

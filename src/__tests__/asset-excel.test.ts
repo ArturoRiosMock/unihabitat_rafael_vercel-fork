@@ -79,7 +79,11 @@ function asset(partial: Partial<Asset> & Pick<Asset, "id">): Asset {
     fullAddr: "",
     desc: "—",
     pub: true,
-    propiedades: [propiedad({ inmuebleId: partial.id })],
+    propiedades: [propiedad({
+      inmuebleId: partial.id,
+      propietario: "Ana López",
+      contacto: "Carlos Ruiz",
+    })],
     ...partial,
   };
 }
@@ -133,6 +137,8 @@ describe("exportación Excel de activos", () => {
       Deuda: 15000,
       Situación: "Publicado",
       Proceso: "Ejecución",
+      Propietario: "Ana López",
+      Contacto: "Carlos Ruiz",
       Publicado: "Sí",
       "Fecha de publicación": "2026-03-15 13:00",
       "Fecha de lanzamiento": "12/03/2024",
@@ -146,6 +152,8 @@ describe("exportación Excel de activos", () => {
       "m²": null,
       Categoría: "",
       Situación: "",
+      Propietario: "",
+      Contacto: "",
     });
   });
 

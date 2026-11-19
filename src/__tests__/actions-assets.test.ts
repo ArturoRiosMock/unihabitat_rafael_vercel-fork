@@ -291,3 +291,55 @@ describe("updatePropiedadExcelRaw", () => {
     });
   });
 });
+
+describe("updatePropiedadFields — propietario y contacto", () => {
+  beforeEach(() => vi.resetModules());
+
+  it("rechaza al agente antes de escribir el propietario", async () => {
+    const auth = await import("@/lib/auth-server");
+    vi.mocked(auth.requireAdmin).mockRejectedValueOnce(
+      new Error("Acceso denegado: se requiere rol admin"),
+    );
+    const createServiceClient = vi.fn();
+    vi.doMock("@/lib/supabase/server", () => ({
+      createClient: vi.fn(),
+      createServiceClient,
+    }));
+    const { updatePropiedadFields } = await import("@/app/actions/assets");
+
+    await expect(updatePropiedadFields("PROP-1", {
+      propietario: "Ana López",
+      contacto: "Carlos Ruiz",
+    })).rejects.toThrow(/admin/);
+    expect(createServiceClient).not.toHaveBeenCalled();
+  });
+
+  it("el admin guarda los dos campos y alinea las celdas del excel", async () => {
+    const sb = makeSupabaseMock({
+      selectMaybeSingle: {
+        data: {
+          excel_raw: {
+            Hoja: { Propietario: "Viejo", Contacto: "Viejo", Deuda: "1" },
+          },
+        },
+        error: null,
+      },
+    });
+    vi.doMock("@/lib/supabase/server", () => ({
+      createClient: vi.fn(async () => sb.client),
+      createServiceClient: vi.fn(async () => sb.client),
+    }));
+    const { updatePropiedadFields } = await import("@/app/actions/assets");
+
+    await updatePropiedadFields("PROP-1", {
+      propietario: "Ana López",
+      contacto: "—",
+    });
+
+    expect(sb.spies.update).toHaveBeenCalledWith({
+      propietario: "Ana López",
+      contacto: "—",
+      excel_raw: { Hoja: { Propietario: "Ana López", Contacto: "", Deuda: "1" } },
+    });
+  });
+});
