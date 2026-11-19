@@ -24,7 +24,8 @@
 |---------|--------|--------------|
 | Formulário contacto | `contacto.ts` | `EMAIL_SUPPORT` |
 | Solicitar información | `email-info-request.ts` | Suporte + dados do imóvel |
-| Nova oferta | `ofertas.ts` | Vendedor atribuído ou suporte |
+| Nova oferta | `ofertas.ts` | Vendedor atribuído ou suporte. Respeita `EMAIL_DRY_RUN` |
+| Mudança de estado da oferta | — | Não envia email ao comprador (`OFERTA_ESTADO_EMAIL_COMPRADOR` está desligado) |
 | Notificação in-app | `notificaciones.ts` | Espelho email ao utilizador |
 | Convite agente | `agente-invite.ts` | Email Supabase magic link |
 

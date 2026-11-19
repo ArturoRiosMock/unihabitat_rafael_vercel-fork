@@ -29,7 +29,8 @@ import {
   setCompradorAcceso,
   updateCompradorFields,
 } from "@/app/actions/compradores";
-import { fetchOfertasByComprador, type OfertaRow } from "@/app/actions/ofertas";
+import { fetchOfertasByComprador } from "@/app/actions/ofertas";
+import { etiquetaEstado, type OfertaRow } from "@/lib/oferta-workflow";
 import {
   createCompradorComentario,
   fetchCompradorComentarios,
@@ -517,7 +518,7 @@ function HistorialOfertasCard({ compradorId }: { compradorId: string }) {
                 ) : null}
               </div>
               <span className="rounded-md bg-blue/8 px-2 py-0.5 text-[10px] font-semibold text-blue">
-                {o.estado}
+                {etiquetaEstado(o.estado)}
               </span>
             </div>
           ))}

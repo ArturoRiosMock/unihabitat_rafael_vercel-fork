@@ -248,12 +248,18 @@ create table if not exists public.ofertas (
     comentarios_author_role is null
     or comentarios_author_role in ('admin', 'vendedor', 'cliente')
   ),
-  estado text default 'pendiente' check (estado in ('pendiente', 'validada', 'rechazada', 'nda_enviado', 'nda_firmado')),
+  estado text default 'realizada' check (estado in (
+    'realizada', 'contraofertada', 'rechazada', 'aceptada', 'pbc_solicitada', 'firmada'
+  )),
   nda_enviado_at timestamptz,
   nda_firmado_at timestamptz,
+  fecha_firma timestamptz,
+  contraoferta_nota text,
+  estado_legacy text,
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
-  constraint ofertas_actor_chk check (comprador_id is not null or vendedor_id is not null)
+  constraint ofertas_actor_chk check (comprador_id is not null or vendedor_id is not null),
+  constraint ofertas_fecha_firma_chk check (estado is distinct from 'firmada' or fecha_firma is not null)
 );
 
 create unique index if not exists ofertas_comprador_asset_uidx
@@ -262,7 +268,26 @@ create unique index if not exists ofertas_comprador_asset_uidx
 
 create unique index if not exists ofertas_vendedor_asset_uidx
   on public.ofertas (vendedor_id, asset_id)
-  where vendedor_id is not null;
+  where vendedor_id is not null and comprador_id is null;
+
+create table if not exists public.oferta_historial (
+  id uuid primary key default gen_random_uuid(),
+  oferta_id uuid not null references public.ofertas(id) on delete cascade,
+  estado_desde text,
+  estado_hasta text not null,
+  importe_anterior numeric,
+  importe_nuevo numeric,
+  nota text,
+  author text,
+  author_role text check (
+    author_role is null
+    or author_role in ('admin', 'vendedor', 'cliente')
+  ),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_oferta_historial_oferta
+  on public.oferta_historial (oferta_id, created_at desc);
 
 create index if not exists idx_ofertas_vendedor on public.ofertas (vendedor_id);
 
@@ -354,6 +379,7 @@ alter table public.asset_informacion_adicional enable row level security;
 alter table public.oportunidades enable row level security;
 alter table public.notificaciones enable row level security;
 alter table public.ofertas enable row level security;
+alter table public.oferta_historial enable row level security;
 
 -- Helper: check if current user is admin
 create or replace function public.is_admin()
@@ -365,6 +391,9 @@ returns boolean as $$
     false
   );
 $$ language sql security definer stable;
+
+create policy "oferta_historial_admin" on public.oferta_historial
+  for all using (public.is_admin()) with check (public.is_admin());
 
 -- ASSETS: public columns readable by anyone, full access for admin
 create policy "assets_public_read" on public.assets

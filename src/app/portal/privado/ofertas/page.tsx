@@ -1,25 +1,22 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { fetchOfertasByComprador, firmarNDA, type OfertaRow } from "@/app/actions/ofertas";
+import { fetchOfertasByComprador } from "@/app/actions/ofertas";
+import { etiquetaEstado, type OfertaEstado, type OfertaRow } from "@/lib/oferta-workflow";
 import { fetchAssetById } from "@/app/actions/assets";
 import { getSession } from "@/app/login/actions";
 import { fetchCompradorByEmail, ensureCompradorForEmail } from "@/app/actions/compradores";
 import type { Asset } from "@/lib/types";
 import Link from "next/link";
-import { ArrowLeft, FileText, CheckCircle2, Clock, XCircle, Loader2, Euro, AlertCircle, PenTool } from "lucide-react";
-import { fmt } from "@/lib/utils";
+import { ArrowLeft, FileText, CheckCircle2, Clock, XCircle, Loader2, Euro, AlertCircle } from "lucide-react";
 import { assetPrivateHref } from "@/lib/public-slug";
 import { CommentByline } from "@/components/CommentByline";
-import { toast } from "@/lib/toast";
 
 export default function MisOfertasPage() {
   const [ofertas, setOfertas] = useState<OfertaRow[]>([]);
   const [assets, setAssets] = useState<Map<string, Asset>>(new Map());
   const [loading, setLoading] = useState(true);
   const [compradorId, setCompradorId] = useState<string | null>(null);
-  const [firmando, setFirmando] = useState<string | null>(null);
-
   useEffect(() => {
     loadData();
   }, []);
@@ -49,20 +46,6 @@ export default function MisOfertasPage() {
       console.error("Error loading ofertas:", err);
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function handleFirmarNDA(ofertaId: string) {
-    if (!confirm("¿Estás seguro de que deseas firmar el NDA? Esta acción es irreversible.")) return;
-    setFirmando(ofertaId);
-    try {
-      await firmarNDA(ofertaId);
-      await loadData();
-      toast.success("NDA firmado", { description: "Tu acuerdo de confidencialidad quedó registrado." });
-    } catch (err) {
-      toast.error("Error al firmar el NDA", { description: err instanceof Error ? err.message : String(err) });
-    } finally {
-      setFirmando(null);
     }
   }
 
@@ -107,12 +90,13 @@ export default function MisOfertasPage() {
             const asset = assets.get(oferta.asset_id);
             if (!asset) return null;
 
-            const estadoConfig: Record<OfertaRow["estado"], { label: string; icon: typeof CheckCircle2; color: string; bg: string }> = {
-              pendiente: { label: "Pendiente de revisión", icon: Clock, color: "text-blue", bg: "bg-blue/10" },
-              validada: { label: "Oferta validada", icon: CheckCircle2, color: "text-green", bg: "bg-green/10" },
-              rechazada: { label: "Oferta rechazada", icon: XCircle, color: "text-red", bg: "bg-red/10" },
-              nda_enviado: { label: "NDA enviado - Pendiente de firma", icon: FileText, color: "text-gold", bg: "bg-gold/10" },
-              nda_firmado: { label: "NDA firmado", icon: CheckCircle2, color: "text-green", bg: "bg-green/10" },
+            const estadoConfig: Record<OfertaEstado, { icon: typeof CheckCircle2; color: string; bg: string }> = {
+              realizada: { icon: Clock, color: "text-blue", bg: "bg-blue/10" },
+              contraofertada: { icon: FileText, color: "text-gold", bg: "bg-gold/10" },
+              rechazada: { icon: XCircle, color: "text-red", bg: "bg-red/10" },
+              aceptada: { icon: CheckCircle2, color: "text-green", bg: "bg-green/10" },
+              pbc_solicitada: { icon: FileText, color: "text-navy", bg: "bg-navy/10" },
+              firmada: { icon: CheckCircle2, color: "text-green", bg: "bg-green/10" },
             };
 
             const config = estadoConfig[oferta.estado];
@@ -131,7 +115,7 @@ export default function MisOfertasPage() {
                       </Link>
                       <span className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[10px] font-semibold ${config.bg} ${config.color}`}>
                         <Icon size={12} />
-                        {config.label}
+                        {etiquetaEstado(oferta.estado)}
                       </span>
                     </div>
                     <div className="mb-2 text-xs text-muted">{asset.tip}</div>
@@ -161,59 +145,24 @@ export default function MisOfertasPage() {
                   </div>
                 </div>
 
-                {oferta.estado === "nda_enviado" && (
-                  <div className="mt-4 rounded-lg border-2 border-gold bg-gold/5 p-4">
-                    <div className="mb-3 flex items-center gap-2">
-                      <FileText size={16} className="text-gold" />
-                      <h3 className="text-sm font-semibold text-navy">NDA Pendiente de Firma</h3>
-                    </div>
-                    <p className="mb-4 text-xs leading-relaxed text-text">
-                      El administrador ha enviado un Acuerdo de Confidencialidad (NDA) para esta propiedad.
-                      Por favor, revisa y firma el documento para acceder a la información completa del activo.
-                    </p>
-                    <button
-                      onClick={() => handleFirmarNDA(oferta.id)}
-                      disabled={firmando === oferta.id}
-                      className="flex items-center gap-2 rounded-lg bg-gold px-4 py-2.5 text-xs font-medium text-white hover:bg-gold2 disabled:opacity-50"
-                    >
-                      {firmando === oferta.id ? (
-                        <>
-                          <Loader2 size={14} className="animate-spin" />
-                          Firmando...
-                        </>
-                      ) : (
-                        <>
-                          <PenTool size={14} />
-                          Firmar NDA
-                        </>
-                      )}
-                    </button>
-                  </div>
-                )}
-
-                {oferta.estado === "nda_firmado" && (
+                {oferta.estado === "firmada" && oferta.fecha_firma ? (
                   <div className="mt-4 rounded-lg border border-green bg-green/5 p-4">
                     <div className="flex items-center gap-2 text-xs text-green">
                       <CheckCircle2 size={14} />
                       <span className="font-medium">
-                        NDA firmado el {new Date(oferta.nda_firmado_at!).toLocaleDateString("es-ES", {
+                        Fecha de firma: {new Date(oferta.fecha_firma).toLocaleDateString("es-ES", {
                           day: "2-digit",
                           month: "long",
                           year: "numeric",
                         })}
                       </span>
                     </div>
-                    <p className="mt-2 text-xs text-muted">
-                      Ya tienes acceso completo a la información de esta propiedad.
-                    </p>
-                    <Link
-                      href={assetPrivateHref(asset)}
-                      className="mt-3 inline-block text-xs font-medium text-gold hover:underline"
-                    >
-                      Ver información completa →
-                    </Link>
                   </div>
-                )}
+                ) : null}
+
+                {oferta.contraoferta_nota ? (
+                  <p className="mt-3 text-xs text-text">Contraoferta: {oferta.contraoferta_nota}</p>
+                ) : null}
 
                 {oferta.estado === "rechazada" && (
                   <div className="mt-4 rounded-lg border border-red/20 bg-red/5 p-4">

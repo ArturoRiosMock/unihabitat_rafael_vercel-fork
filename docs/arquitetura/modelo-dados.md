@@ -68,11 +68,12 @@ Campos que antes viviam em `asset.adm.*` devem ser lidos de `asset.propiedades[]
 | Vendedor | `vendedores` | Agente; convite via Supabase Auth |
 | Tarea | `tareas` | Tarefas internas |
 | Oportunidade | `oportunidades` | Match com score |
-| Oferta | `ofertas` | Proposta + estados NDA |
+| Oferta | `ofertas` | Uma proposta por comprador e activo. Estados: `realizada`, `contraofertada`, `rechazada` (não firmada) e `aceptada`, `pbc_solicitada`, `firmada` (firmada; `fecha_firma` obrigatória). O valor antigo fica em `estado_legacy`. `nda_enviado_at` / `nda_firmado_at` não se apagam. A contraoferta actualiza a mesma fila |
 | Notificacion | `notificaciones` | Alertas in-app (+ email espelhado) |
 | Nota | `notas` | `scope`: `activo` (Características; cada agente vê as suas, admin todas) ou `privada` (só admin). `author_id` e `author_role` = quem criou. Na UI, rol `admin` lê-se «Gestor». «Mis notas» do portal leva `comprador_id`. DELETE só admin |
 | Comentário do comprador | `comprador_comentarios` | Chamadas e ações na ficha do comprador. Admin vê tudo. O agente só o comprador que gere (`vendedor_compradores`) |
 | NDA do activo | `asset_nda_aceptaciones` | Uma fila por activo, utilizador e versão do texto. Nome escrito, data, IP, user-agent. Admin vê tudo. Agente e comprador só as suas (`auth.uid()`), sem ler `vendedores` |
+| Histórico da oferta | `oferta_historial` | Cada mudança: autor, data, estado anterior e novo, importe e nota. O admin grava-se como «Gestor». RLS só `is_admin()`; a app filtra o agente no servidor |
 
 Tabelas de relação: `comprador_assets` (convites), `comprador_favoritos`, `vendedor_permissions`, `vendedor_assets`, `vendedor_compradores`.
 

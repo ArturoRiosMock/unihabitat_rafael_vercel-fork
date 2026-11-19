@@ -36,6 +36,7 @@ import { isBlankOwnerValue } from "@/lib/propietario-contacto";
 import { toast } from "@/lib/toast";
 import { datosFirmaCompletos, datosFirmaFromComprador, datosFirmaVacios, nombreVisible, type DatosFirma } from "@/lib/comprador-oferta";
 import { OfertaDatosComprador } from "@/components/OfertaDatosComprador";
+import { AssetClientesBloques } from "@/components/AssetClientesBloques";
 
 const tabs = [
   { icon: Home,       label: "Características", adminOnly: false, contentIndex: 0 },
@@ -489,9 +490,9 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset, canDelet
       toast.success("Oferta registrada", {
         description: isAgente
           ? ofertaCompradorId
-            ? "Vinculada a tu comprador · pendiente"
-            : "Asignada a tu usuario · pendiente"
-          : "Estado: pendiente",
+            ? "Vinculada a tu comprador · oferta realizada"
+            : "Asignada a tu usuario · oferta realizada"
+          : "Estado: oferta realizada",
       });
     } catch (err) {
       setOfertaStatus("error");
@@ -683,7 +684,7 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset, canDelet
                 <div className="flex flex-col items-center gap-3 py-4 text-center">
                   <CheckCircle2 size={32} className="text-green" />
                   <p className="text-sm font-medium text-navy">Oferta registrada correctamente</p>
-                  <p className="text-xs text-muted">Queda en estado pendiente.</p>
+                  <p className="text-xs text-muted">Queda en estado oferta realizada.</p>
                   <div className="mt-2 flex flex-wrap justify-center gap-2">
                     <Link
                       href={`/admin/ofertas?asset=${encodeURIComponent(assetId)}`}
@@ -1302,6 +1303,7 @@ function TabClientes({ assetId }: { assetId: string }) {
 
   return (
     <>
+      <AssetClientesBloques assetId={assetId} />
       <div className="mb-3 flex items-center justify-between">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
           Clientes con acceso ({invitedIds.size})

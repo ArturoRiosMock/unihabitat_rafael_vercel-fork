@@ -80,12 +80,14 @@ Todas em `src/app/actions/`. Padrão: `"use server"`, auth via `auth-server.ts`,
 
 | Função | Descrição |
 |--------|-----------|
-| `createOferta` | Comprador submete proposta. Exige a ficha de firma completa e grava na ficha o que completar no formulário |
-| `createOfertaAdmin` | Admin ou agente. Com comprador, a mesma validação de firma. Sem comprador, a oferta fica em nome do agente |
-| `fetchOfertasByAsset` / `fetchOfertasByComprador` | Listagens |
-| `fetchOfertasPendientes` | Admin — pendentes |
-| `updateOfertaEstado` | Validar/rejeitar |
-| `firmarNDA` | Comprador assina NDA |
+| `createOferta` | Comprador submete proposta em estado `realizada`. Exige a ficha de firma. Se já existe oferta desse comprador no activo: «Este comprador ya tiene una oferta en este activo» |
+| `createOfertaAdmin` | Admin ou agente. Com comprador, a mesma validação. Sem comprador, a oferta fica em nome do agente |
+| `fetchOfertas` / `fetchOfertasByAsset` | Admin vê todas. Agente só as suas e as dos compradores que gere. Exige sessão admin ou agente |
+| `fetchOfertasByComprador` | Admin, o agente atribuído, ou o próprio comprador |
+| `fetchOfertasPendientes` | `realizada` e `contraofertada`, com o mesmo filtro de agente |
+| `updateOfertaEstado` | Transições válidas no servidor. Contraoferta grava importe e nota na mesma oferta e no histórico. `firmada` exige data. Não envia email ao comprador |
+| `firmarNDA` | Já não muda o estado. O NDA assina-se na documentação do activo |
+| `fetchClientesInteresados` | [`asset-clientes.ts`](../../src/app/actions/asset-clientes.ts). Compradores atribuídos, com favorito ou com NDA do activo. Sem duplicar. O agente só vê os seus |
 
 ## Convites comprador ↔ imóvel
 

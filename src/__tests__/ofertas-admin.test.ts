@@ -51,7 +51,8 @@ function makeOfertaSupabaseMock(opts: {
   comprador?: Record<string, unknown> | null;
   vendedor?: { id: string } | null;
   insertRow?: Record<string, unknown>;
-  insertError?: { message: string } | null;
+  insertError?: { message: string; code?: string } | null;
+  existingOferta?: { id: string } | null;
 }) {
   const compradorRow = opts.comprador === null
     ? null
@@ -62,6 +63,11 @@ function makeOfertaSupabaseMock(opts: {
   }));
   const insertSelect = vi.fn(() => ({ single: insertSingle }));
   const insert = vi.fn(() => ({ select: insertSelect }));
+  const historialInsert = vi.fn(async () => ({ error: null }));
+  const ofertaExistente = vi.fn(async () => ({
+    data: opts.existingOferta ?? null,
+    error: null,
+  }));
   const updateEq = vi.fn(async () => ({ error: null }));
   const update = vi.fn(() => ({ eq: updateEq }));
 
@@ -105,7 +111,21 @@ function makeOfertaSupabaseMock(opts: {
       };
     }
     if (table === "ofertas") {
-      return { insert };
+      return {
+        insert,
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              is: vi.fn(() => ({ maybeSingle: ofertaExistente })),
+              maybeSingle: ofertaExistente,
+            })),
+            maybeSingle: ofertaExistente,
+          })),
+        })),
+      };
+    }
+    if (table === "oferta_historial") {
+      return { insert: historialInsert };
     }
     return {
       select: vi.fn(() => ({
@@ -118,7 +138,7 @@ function makeOfertaSupabaseMock(opts: {
     };
   });
 
-  return { client: { from }, spies: { from, insert, insertSingle, update } };
+  return { client: { from }, spies: { from, insert, insertSingle, update, historialInsert } };
 }
 
 describe("createOfertaAdmin", () => {
@@ -193,7 +213,7 @@ describe("createOfertaAdmin", () => {
       asset_id: "A1",
       propuesta_euros: 125000,
       comentarios: "nota",
-      estado: "pendiente",
+      estado: "realizada",
       nda_enviado_at: null,
       nda_firmado_at: null,
       created_at: "2026-01-01",
@@ -217,7 +237,7 @@ describe("createOfertaAdmin", () => {
       comentarios: "nota",
     });
 
-    expect(out.estado).toBe("pendiente");
+    expect(out.estado).toBe("realizada");
     expect(out.id).toBe("O1");
     expect(sb.spies.insert).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -225,10 +245,20 @@ describe("createOfertaAdmin", () => {
         vendedor_id: null,
         asset_id: "A1",
         propuesta_euros: 125000,
-        estado: "pendiente",
+        estado: "realizada",
         comentarios: "nota",
         comentarios_author: "Admin",
         comentarios_author_role: "admin",
+      }),
+    );
+    expect(sb.spies.historialInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        oferta_id: "O1",
+        estado_desde: null,
+        estado_hasta: "realizada",
+        importe_nuevo: 125000,
+        author: "Gestor",
+        author_role: "admin",
       }),
     );
   });
@@ -247,7 +277,7 @@ describe("createOfertaAdmin", () => {
       asset_id: "A1",
       propuesta_euros: 50000,
       comentarios: null,
-      estado: "pendiente",
+      estado: "realizada",
       nda_enviado_at: null,
       nda_firmado_at: null,
       created_at: "2026-01-01",
@@ -276,7 +306,7 @@ describe("createOfertaAdmin", () => {
         comprador_id: null,
         vendedor_id: "V1",
         asset_id: "A1",
-        estado: "pendiente",
+        estado: "realizada",
       }),
     );
   });
@@ -310,7 +340,7 @@ describe("createOfertaAdmin", () => {
       asset_id: "A1",
       propuesta_euros: 80000,
       comentarios: null,
-      estado: "pendiente",
+      estado: "realizada",
       nda_enviado_at: null,
       nda_firmado_at: null,
       created_at: "2026-01-01",
@@ -417,5 +447,27 @@ describe("createOfertaAdmin", () => {
         propuestaEuros: 1000,
       }),
     ).rejects.toThrow(/fila vendedores.*no existe/i);
+  });
+
+  it("si el comprador ya tiene oferta en el activo, el mensaje es explícito y no inserta", async () => {
+    const sb = makeOfertaSupabaseMock({
+      asset: { id: "A1" },
+      comprador: { id: "C1" },
+      existingOferta: { id: "YA" },
+    });
+    vi.doMock("@/lib/supabase/server", () => ({
+      createClient: vi.fn(async () => sb.client),
+      createServiceClient: vi.fn(async () => sb.client),
+    }));
+    const { createOfertaAdmin } = await import("@/app/actions/ofertas");
+
+    await expect(
+      createOfertaAdmin({
+        compradorId: "C1",
+        assetId: "A1",
+        propuestaEuros: 1000,
+      }),
+    ).rejects.toThrow("Este comprador ya tiene una oferta en este activo");
+    expect(sb.spies.insert).not.toHaveBeenCalled();
   });
 });

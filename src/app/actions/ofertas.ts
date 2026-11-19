@@ -4,11 +4,10 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
 import { EMAIL_SUPPORT } from "@/lib/email/resend";
 import { offerTemplate } from "@/lib/email/templates";
-import { getServerSession, requireAdminOrVendor } from "@/lib/auth-server";
+import { getServerSession, requireAdminOrVendor, requireAssetAccess } from "@/lib/auth-server";
 import { displayCommentAuthor } from "@/lib/comment-author";
 import { canReadComprador, eventoRenuevaGestion } from "@/lib/comprador-gestion";
 import { fetchAssignedVendedorId, touchUltimaGestionAgente } from "@/lib/comprador-gestion-run";
-import { fetchCompradorByEmail } from "@/app/actions/compradores";
 import {
   datosFirmaFromRow,
   mergeDatosFirma,
@@ -19,23 +18,19 @@ import {
 } from "@/lib/comprador-oferta";
 import type { UserSession } from "@/lib/permissions";
 import type { SupabaseClient } from "@supabase/supabase-js";
-
-export interface OfertaRow {
-  id: string;
-  comprador_id: string | null;
-  vendedor_id: string | null;
-  asset_id: string;
-  propuesta_euros: number;
-  comentarios: string | null;
-  /** Nombre visible del comentario. El admin llega como «Gestor». */
-  comentarios_author?: string | null;
-  comentarios_author_role?: string | null;
-  estado: "pendiente" | "validada" | "rechazada" | "nda_enviado" | "nda_firmado";
-  nda_enviado_at: string | null;
-  nda_firmado_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
+import {
+  authorHistorial,
+  esOfertaEstado,
+  mensajeErrorOferta,
+  MENSAJE_OFERTA_AGENTE_DUPLICADA,
+  MENSAJE_OFERTA_DUPLICADA,
+  puedeVerOferta,
+  validarCambioOferta,
+  type CambioOfertaInput,
+  type OfertaEstado,
+  type OfertaHistorialRow,
+  type OfertaRow,
+} from "@/lib/oferta-workflow";
 
 function commentAttribution(session: UserSession | null, comentarios: string | null): {
   comentarios_author: string | null;
@@ -50,15 +45,167 @@ function commentAttribution(session: UserSession | null, comentarios: string | n
   };
 }
 
+function asNumber(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function asNumberOrNull(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function presentOferta(row: OfertaRow): OfertaRow {
-  if (!row.comentarios) return row;
-  return {
+  const presented: OfertaRow = {
     ...row,
+    propuesta_euros: asNumber(row.propuesta_euros),
+    fecha_firma: row.fecha_firma ?? null,
+    contraoferta_nota: row.contraoferta_nota ?? null,
+  };
+  if (!presented.comentarios) return presented;
+  return {
+    ...presented,
     comentarios_author: displayCommentAuthor({
       author: row.comentarios_author,
       authorRole: row.comentarios_author_role,
     }),
   };
+}
+
+function presentHistorial(row: OfertaHistorialRow): OfertaHistorialRow {
+  return {
+    ...row,
+    importe_anterior: asNumberOrNull(row.importe_anterior),
+    importe_nuevo: asNumberOrNull(row.importe_nuevo),
+    author: displayCommentAuthor({ author: row.author, authorRole: row.author_role }),
+  };
+}
+
+function throwOfertaWriteError(error: { code?: string; message: string; details?: string | null }): never {
+  throw new Error(mensajeErrorOferta(error));
+}
+
+async function assertSinDuplicado(
+  sb: SupabaseClient,
+  compradorId: string | null,
+  vendedorId: string | null,
+  assetId: string,
+): Promise<void> {
+  if (compradorId) {
+    const { data, error } = await sb
+      .from("ofertas")
+      .select("id")
+      .eq("comprador_id", compradorId)
+      .eq("asset_id", assetId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (data) throw new Error(MENSAJE_OFERTA_DUPLICADA);
+    return;
+  }
+  if (!vendedorId) return;
+  const { data, error } = await sb
+    .from("ofertas")
+    .select("id")
+    .eq("vendedor_id", vendedorId)
+    .eq("asset_id", assetId)
+    .is("comprador_id", null)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (data) throw new Error(MENSAJE_OFERTA_AGENTE_DUPLICADA);
+}
+
+async function insertHistorial(
+  sb: SupabaseClient,
+  row: {
+    oferta_id: string;
+    estado_desde: string | null;
+    estado_hasta: string;
+    importe_anterior: number | null;
+    importe_nuevo: number | null;
+    nota: string | null;
+    author: string;
+    author_role: string;
+  },
+): Promise<void> {
+  const { error } = await sb.from("oferta_historial").insert(row);
+  if (error) throw new Error(error.message);
+}
+
+async function adjuntarHistorial(sb: SupabaseClient, rows: OfertaRow[]): Promise<OfertaRow[]> {
+  const presentadas = rows.map(presentOferta);
+  if (presentadas.length === 0) return [];
+  const ids = presentadas.map((row) => row.id);
+  const { data, error } = await sb
+    .from("oferta_historial")
+    .select("*")
+    .in("oferta_id", ids)
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(error.message);
+  const byOferta = new Map<string, OfertaHistorialRow[]>();
+  for (const raw of data ?? []) {
+    const item = presentHistorial(raw as OfertaHistorialRow);
+    const list = byOferta.get(item.oferta_id) ?? [];
+    list.push(item);
+    byOferta.set(item.oferta_id, list);
+  }
+  return presentadas.map((row) => ({ ...row, historial: byOferta.get(row.id) ?? [] }));
+}
+
+async function assertPuedeGestionarOferta(
+  session: UserSession,
+  sb: SupabaseClient,
+  oferta: OfertaRow,
+): Promise<void> {
+  let asignado: string | null = null;
+  if (session.role === "vendedor" && oferta.comprador_id) {
+    asignado = await fetchAssignedVendedorId(sb, oferta.comprador_id);
+  }
+  const visible = puedeVerOferta({
+    role: session.role,
+    vendedorId: session.vendedorId ?? null,
+    compradorAsignadoA: asignado,
+    ofertaVendedorId: oferta.vendedor_id,
+    ofertaCompradorId: oferta.comprador_id,
+  });
+  if (!visible) {
+    throw new Error("Solo puedes gestionar las ofertas de tus compradores");
+  }
+}
+
+async function asignacionDeCompradores(
+  sb: SupabaseClient,
+  compradorIds: string[],
+): Promise<Map<string, string | null>> {
+  const asignacion = new Map<string, string | null>();
+  for (const id of compradorIds) asignacion.set(id, null);
+  if (compradorIds.length === 0) return asignacion;
+  const { data, error } = await sb
+    .from("vendedor_compradores")
+    .select("comprador_id, vendedor_id, assigned_at")
+    .in("comprador_id", compradorIds)
+    .order("assigned_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  for (const row of data ?? []) {
+    const compradorId = row.comprador_id as string;
+    if (asignacion.get(compradorId)) continue;
+    asignacion.set(compradorId, row.vendedor_id as string);
+  }
+  return asignacion;
+}
+
+function ofertaVisibleParaSesion(
+  session: UserSession,
+  oferta: OfertaRow,
+  asignacion: Map<string, string | null>,
+): boolean {
+  return puedeVerOferta({
+    role: session.role,
+    vendedorId: session.vendedorId ?? null,
+    compradorAsignadoA: oferta.comprador_id ? (asignacion.get(oferta.comprador_id) ?? null) : null,
+    ofertaVendedorId: oferta.vendedor_id,
+    ofertaCompradorId: oferta.comprador_id,
+  });
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -213,6 +360,7 @@ export async function createOferta(params: {
     throw new Error("Acceso denegado: no puedes presentar esta oferta");
   }
   await exigirDatosFirma(service, params.compradorId, params.datos);
+  await assertSinDuplicado(service, params.compradorId, null, params.assetId);
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("ofertas")
@@ -222,13 +370,24 @@ export async function createOferta(params: {
       propuesta_euros: params.propuestaEuros,
       comentarios,
       ...commentAttribution(session, comentarios),
-      estado: "pendiente",
+      estado: "realizada",
     })
     .select()
     .single();
-  if (error) throw new Error(error.message);
+  if (error) throwOfertaWriteError(error);
 
   const oferta = presentOferta(data as OfertaRow);
+  const author = authorHistorial(session);
+  await insertHistorial(service, {
+    oferta_id: oferta.id,
+    estado_desde: null,
+    estado_hasta: "realizada",
+    importe_anterior: null,
+    importe_nuevo: oferta.propuesta_euros,
+    nota: null,
+    author: author.author,
+    author_role: author.author_role,
+  });
   await notifyOfferRecipients(
     oferta.id,
     oferta.asset_id,
@@ -320,6 +479,8 @@ export async function createOfertaAdmin(params: {
     await exigirDatosFirma(supabase, compradorId, params.datos);
   }
 
+  await assertSinDuplicado(supabase, compradorId, vendedorId, assetId);
+
   const comentarios = params.comentarios?.trim() || null;
   const { data, error } = await supabase
     .from("ofertas")
@@ -330,11 +491,23 @@ export async function createOfertaAdmin(params: {
       propuesta_euros: propuesta,
       comentarios,
       ...commentAttribution(session, comentarios),
-      estado: "pendiente",
+      estado: "realizada",
     })
     .select()
     .single();
-  if (error) throw new Error(error.message);
+  if (error) throwOfertaWriteError(error);
+
+  const author = authorHistorial(session);
+  await insertHistorial(supabase, {
+    oferta_id: (data as OfertaRow).id,
+    estado_desde: null,
+    estado_hasta: "realizada",
+    importe_anterior: null,
+    importe_nuevo: propuesta,
+    nota: null,
+    author: author.author,
+    author_role: author.author_role,
+  });
 
   const oferta = presentOferta(data as OfertaRow);
   if (
@@ -359,144 +532,160 @@ export async function createOfertaAdmin(params: {
   return oferta;
 }
 
-export async function fetchOfertasByAsset(assetId: string): Promise<OfertaRow[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("ofertas")
-    .select("*")
-    .eq("asset_id", assetId)
-    .order("created_at", { ascending: false });
+async function leerOfertas(
+  sb: SupabaseClient,
+  session: UserSession,
+  filtro: { estado?: OfertaEstado | ""; assetId?: string },
+): Promise<OfertaRow[]> {
+  let query = sb.from("ofertas").select("*").order("created_at", { ascending: false });
+  if (filtro.assetId) query = query.eq("asset_id", filtro.assetId);
+  if (filtro.estado && esOfertaEstado(filtro.estado)) query = query.eq("estado", filtro.estado);
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
-  return ((data ?? []) as OfertaRow[]).map(presentOferta);
+  const rows = (data ?? []) as OfertaRow[];
+  if (session.role === "admin") return adjuntarHistorial(sb, rows);
+
+  const compradorIds = [...new Set(rows.map((row) => row.comprador_id).filter((id): id is string => !!id))];
+  const asignacion = await asignacionDeCompradores(sb, compradorIds);
+  const visibles = rows.filter((row) => ofertaVisibleParaSesion(session, row, asignacion));
+  return adjuntarHistorial(sb, visibles);
+}
+
+export async function fetchOfertasByAsset(assetId: string): Promise<OfertaRow[]> {
+  const session = await requireAdminOrVendor();
+  const id = assetId.trim();
+  if (!id) return [];
+  await requireAssetAccess(session, id);
+  const supabase = await createServiceClient();
+  return leerOfertas(supabase, session, { assetId: id });
 }
 
 export async function fetchOfertasByComprador(compradorId: string): Promise<OfertaRow[]> {
   const session = await getServerSession();
-  if (!session || (session.role !== "admin" && session.role !== "vendedor")) {
+  if (!session) throw new Error("Acceso denegado");
+  const supabase = await createServiceClient();
+
+  if (session.role === "cliente") {
+    const { data: dueno, error: duenoErr } = await supabase
+      .from("compradores")
+      .select("id, email")
+      .eq("id", compradorId)
+      .maybeSingle();
+    if (duenoErr) throw new Error(duenoErr.message);
+    const email = ((dueno?.email as string | undefined) ?? "").trim().toLowerCase();
+    const propio = (session.compradorId && session.compradorId === compradorId)
+      || (email && email === session.email.trim().toLowerCase());
+    if (!propio) throw new Error("Acceso denegado");
+  } else if (session.role === "admin" || session.role === "vendedor") {
+    const assigned = await fetchAssignedVendedorId(supabase, compradorId);
+    if (
+      !canReadComprador(
+        { role: session.role, vendedorId: session.vendedorId ?? null },
+        assigned,
+      )
+    ) {
+      throw new Error("Solo el agente asignado puede ver este comprador");
+    }
+  } else {
     throw new Error("Acceso denegado");
   }
-  const supabase = await createServiceClient();
-  const assigned = await fetchAssignedVendedorId(supabase, compradorId);
-  if (
-    !canReadComprador(
-      { role: session.role, vendedorId: session.vendedorId ?? null },
-      assigned,
-    )
-  ) {
-    throw new Error("Solo el agente asignado puede ver este comprador");
-  }
+
   const { data, error } = await supabase
     .from("ofertas")
     .select("*")
     .eq("comprador_id", compradorId)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return ((data ?? []) as OfertaRow[]).map(presentOferta);
+  return adjuntarHistorial(supabase, (data ?? []) as OfertaRow[]);
 }
 
+/** Ofertas aún abiertas: realizada o contraofertada. */
 export async function fetchOfertasPendientes(): Promise<OfertaRow[]> {
-  const supabase = await createClient();
+  const session = await requireAdminOrVendor();
+  const supabase = await createServiceClient();
   const { data, error } = await supabase
     .from("ofertas")
     .select("*")
-    .in("estado", ["pendiente", "nda_enviado"])
+    .in("estado", ["realizada", "contraofertada"])
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return ((data ?? []) as OfertaRow[]).map(presentOferta);
+  const rows = (data ?? []) as OfertaRow[];
+  if (session.role === "admin") return adjuntarHistorial(supabase, rows);
+  const compradorIds = [...new Set(rows.map((row) => row.comprador_id).filter((id): id is string => !!id))];
+  const asignacion = await asignacionDeCompradores(supabase, compradorIds);
+  return adjuntarHistorial(
+    supabase,
+    rows.filter((row) => ofertaVisibleParaSesion(session, row, asignacion)),
+  );
 }
 
 /**
- * Ofertas para el panel admin/vendedor.
- * Admin: ve todas. Vendedor: solo las que tienen su vendedor_id.
- * Filtro opcional por estado.
+ * Listado admin/agente.
+ * Admin: todas. Agente: las suyas (vendedor_id) y las de sus compradores.
+ * No incluye ofertas de compradores de otro agente.
  */
-export async function fetchOfertas(estado?: OfertaRow["estado"] | ""): Promise<OfertaRow[]> {
-  const session = await getServerSession();
-  const supabase = await createClient();
-  let q = supabase.from("ofertas").select("*").order("created_at", { ascending: false });
-
-  if (session?.role === "vendedor" && session.vendedorId) {
-    q = q.eq("vendedor_id", session.vendedorId);
-  }
-
-  if (estado) q = q.eq("estado", estado);
-  const { data, error } = await q;
-  if (error) throw new Error(error.message);
-  return ((data ?? []) as OfertaRow[]).map(presentOferta);
+export async function fetchOfertas(estado?: OfertaEstado | ""): Promise<OfertaRow[]> {
+  const session = await requireAdminOrVendor();
+  const supabase = await createServiceClient();
+  return leerOfertas(supabase, session, { estado });
 }
 
-export async function updateOfertaEstado(
-  ofertaId: string,
-  estado: OfertaRow["estado"]
-): Promise<void> {
-  await requireAdminOrVendor();
-  const serviceClient = await createServiceClient();
-  const updateData: Partial<OfertaRow> = { estado, updated_at: new Date().toISOString() };
-  if (estado === "nda_enviado") {
-    updateData.nda_enviado_at = new Date().toISOString();
-  } else if (estado === "nda_firmado") {
-    updateData.nda_firmado_at = new Date().toISOString();
-  }
-  const { error } = await serviceClient
-    .from("ofertas")
-    .update(updateData)
-    .eq("id", ofertaId);
+/**
+ * Cambia el estado si la transición es válida. La contraoferta actualiza
+ * la misma oferta y añade una fila al historial. No envía email al comprador.
+ */
+export async function updateOfertaEstado(input: CambioOfertaInput): Promise<void> {
+  const session = await requireAdminOrVendor();
+  const ofertaId = input.ofertaId?.trim();
+  if (!ofertaId) throw new Error("Falta la oferta");
+
+  const sb = await createServiceClient();
+  const { data, error } = await sb.from("ofertas").select("*").eq("id", ofertaId).maybeSingle();
   if (error) throw new Error(error.message);
+  if (!data) throw new Error("Oferta no encontrada");
+  const actual = presentOferta(data as OfertaRow);
+  await assertPuedeGestionarOferta(session, sb, actual);
+
+  const check = validarCambioOferta(actual, input);
+  if (!check.ok) throw new Error(check.error);
+
+  const patch: Record<string, unknown> = {
+    estado: check.estado,
+    updated_at: new Date().toISOString(),
+  };
+  if (check.estado === "contraofertada") {
+    patch.propuesta_euros = check.importe;
+    patch.contraoferta_nota = check.nota;
+  }
+  if (check.estado === "firmada") {
+    patch.fecha_firma = check.fechaFirma;
+  }
+
+  const { error: updateError } = await sb.from("ofertas").update(patch).eq("id", ofertaId);
+  if (updateError) throw new Error(updateError.message);
+
+  const author = authorHistorial(session);
+  await insertHistorial(sb, {
+    oferta_id: ofertaId,
+    estado_desde: actual.estado,
+    estado_hasta: check.estado,
+    importe_anterior: actual.propuesta_euros,
+    importe_nuevo: check.estado === "contraofertada" ? check.importe : actual.propuesta_euros,
+    nota: check.estado === "contraofertada" ? check.nota : null,
+    author: author.author,
+    author_role: author.author_role,
+  });
 }
 
+/**
+ * El NDA ya no va ligado al estado de la oferta: se acepta en la
+ * documentación del activo (`asset_nda_aceptaciones`).
+ */
 export async function firmarNDA(ofertaId: string): Promise<void> {
   const session = await getServerSession();
   if (!session?.email) {
     throw new Error("Acceso denegado: se requiere autenticación");
   }
-  if (session.role === "admin" || session.role === "vendedor") {
-    throw new Error("Acceso denegado: acción reservada al comprador");
-  }
-
-  const comprador = await fetchCompradorByEmail(session.email);
-  if (!comprador) {
-    throw new Error("Comprador no encontrado");
-  }
-
-  const supabase = await createClient();
-  const { data: oferta, error: fetchErr } = await supabase
-    .from("ofertas")
-    .select("comprador_id, asset_id, estado")
-    .eq("id", ofertaId)
-    .maybeSingle();
-  if (fetchErr) throw new Error(fetchErr.message);
-  if (!oferta) throw new Error("Oferta no encontrada");
-  if (oferta.comprador_id !== comprador.id) {
-    throw new Error("Acceso denegado: no puedes firmar esta oferta");
-  }
-  if (oferta.estado !== "nda_enviado") {
-    throw new Error("Esta oferta no está pendiente de firma de NDA");
-  }
-
-  const { error } = await supabase
-    .from("ofertas")
-    .update({
-      estado: "nda_firmado",
-      nda_firmado_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", ofertaId);
-  if (error) throw new Error(error.message);
-
-  // Sincroniza flag NDA del comprador (no automatiza acceso al portal).
-  if (oferta?.comprador_id) {
-    const service = await createServiceClient();
-    await service
-      .from("compradores")
-      .update({ nda: "Firmada" })
-      .eq("id", oferta.comprador_id);
-
-    if (oferta.asset_id) {
-      await service
-        .from("oportunidades")
-        .update({ estado: "contactada", updated_at: new Date().toISOString() })
-        .eq("comprador_id", oferta.comprador_id)
-        .eq("asset_id", oferta.asset_id);
-    }
-  }
+  if (!ofertaId.trim()) throw new Error("Falta la oferta");
+  throw new Error("El NDA se acepta en la documentación del activo");
 }

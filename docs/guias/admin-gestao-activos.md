@@ -32,6 +32,15 @@ Quando mapa ou dados cadastrais estão incompletos:
 
 Ver [enriquecimento-catastro.md](../fluxos-tecnicos/enriquecimento-catastro.md).
 
+## Clientes na ficha do activo
+
+A pestana **Clientes** é só admin. Dois blocos:
+
+- **Los clientes interesados** — compradores atribuídos ao activo (`comprador_assets`), que o marcaram como favorito (`comprador_favoritos`) ou que assinaram o NDA desse activo (`asset_nda_aceptaciones`, só se o utilizador é um comprador). Uma linha por pessoa, com nome, agente, data, origem e ligação à ficha. A solicitação de informação do portal é só um email: não há fila para listar.
+- **Ofertas recibidas** — ofertas desse activo, com comprador, agente, importe, data, estado e mudança de estado.
+
+Por baixo continua o convite: **Compartir con cliente** / revogar. O agente não abre esta pestana. Se chamar as actions, o servidor só lhe devolve os compradores e as ofertas que gere (`vendedor_compradores` ou `ofertas.vendedor_id`).
+
 ## Convites a compradores
 
 Na ficha do imóvel — secção clientes convidados:

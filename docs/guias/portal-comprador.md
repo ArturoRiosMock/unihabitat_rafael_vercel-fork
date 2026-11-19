@@ -41,10 +41,10 @@ O comprador vê:
 ## Ofertas (`/portal/privado/ofertas`)
 
 - Lista propostas do comprador
-- Estados: pendente, validada, rejeitada
-- Fluxo **NDA**: admin pode enviar NDA; comprador firma via `firmarNDA`
+- Estados: oferta realizada, contraofertada, rejeitada, aceite, documentação PBC, data de firma
+- O NDA **não** se assina nesta lista. Assina-se na documentação de cada activo
 
-Emails automáticos para vendedor atribuído ou suporte (`EMAIL_SUPPORT`) quando nova oferta.
+Emails automáticos para vendedor atribuído ou suporte (`EMAIL_SUPPORT`) quando há uma oferta nova. Mudar o estado não escreve ao comprador. O envio passa por `EMAIL_DRY_RUN`.
 
 ## Registo de comprador
 

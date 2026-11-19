@@ -3,33 +3,35 @@
 import { Suspense, useState, useEffect, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useApp } from "@/lib/context";
-import { fetchOfertas, updateOfertaEstado, type OfertaRow } from "@/app/actions/ofertas";
+import { fetchOfertas, updateOfertaEstado } from "@/app/actions/ofertas";
 import { fetchCompradores } from "@/app/actions/compradores";
 import { fetchAssetByIdForAdmin } from "@/app/actions/assets";
 import type { Asset, Comprador } from "@/lib/types";
 import Link from "next/link";
-import { FileText, CheckCircle2, XCircle, Send, Loader2, AlertCircle, Euro, X } from "lucide-react";
+import { FileText, Loader2, Euro, X } from "lucide-react";
 import { fmt } from "@/lib/utils";
 import { CommentByline } from "@/components/CommentByline";
+import { OfertaEstadoForm, OfertaHistorialLista } from "@/components/OfertaEstadoForm";
 import { nombreVisible } from "@/lib/comprador-oferta";
+import {
+  ETIQUETA_ESTADO,
+  ETIQUETA_GRUPO,
+  OFERTA_ESTADOS,
+  agruparOfertasPorFirma,
+  etiquetaEstado,
+  type OfertaEstado,
+  type OfertaRow,
+} from "@/lib/oferta-workflow";
 import { toast } from "@/lib/toast";
 
-const ESTADO_FILTRO: Array<OfertaRow["estado"] | ""> = [
-  "",
-  "pendiente",
-  "nda_enviado",
-  "nda_firmado",
-  "validada",
-  "rechazada",
-];
-
-const ESTADO_OPCIONES: OfertaRow["estado"][] = [
-  "pendiente",
-  "validada",
-  "rechazada",
-  "nda_enviado",
-  "nda_firmado",
-];
+const ESTADO_COLOR: Record<OfertaEstado, string> = {
+  realizada: "bg-blue/10 text-blue",
+  contraofertada: "bg-gold/10 text-gold",
+  rechazada: "bg-red/10 text-red",
+  aceptada: "bg-green/10 text-green",
+  pbc_solicitada: "bg-navy/10 text-navy",
+  firmada: "bg-green/10 text-green",
+};
 
 export default function OfertasPage() {
   return (
@@ -52,7 +54,7 @@ function OfertasPageInner() {
   const assetFilter = searchParams.get("asset") ?? "";
   const [ofertas, setOfertas] = useState<OfertaRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [fEstado, setFEstado] = useState<OfertaRow["estado"] | "">("");
+  const [fEstado, setFEstado] = useState<OfertaEstado | "">("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [compradores, setCompradores] = useState<Map<string, Comprador>>(new Map());
   const [assetsMap, setAssetsMap] = useState<Map<string, Asset>>(new Map());
@@ -102,6 +104,7 @@ function OfertasPageInner() {
     () => assetFilter ? ofertas.filter(o => o.asset_id === assetFilter) : ofertas,
     [ofertas, assetFilter],
   );
+  const grupos = useMemo(() => agruparOfertasPorFirma(filteredOfertas), [filteredOfertas]);
 
   const filterAsset = assetFilter ? assetsMap.get(assetFilter) ?? assets.find(a => a.id === assetFilter) : undefined;
 
@@ -109,15 +112,21 @@ function OfertasPageInner() {
     router.replace("/admin/ofertas");
   };
 
-  async function handleEstadoChange(ofertaId: string, nuevoEstado: OfertaRow["estado"]) {
+  async function handleEstadoChange(ofertaId: string, cambio: {
+    estado: OfertaEstado;
+    importe?: number;
+    nota?: string;
+    fechaFirma?: string;
+  }) {
     setUpdatingId(ofertaId);
     try {
-      await updateOfertaEstado(ofertaId, nuevoEstado);
+      await updateOfertaEstado({ ofertaId, ...cambio });
       await loadData();
-      toast.success("Estado de oferta actualizado", { description: `Nuevo estado: ${nuevoEstado.replace(/_/g, " ")}` });
+      toast.success("Estado de oferta actualizado", { description: etiquetaEstado(cambio.estado) });
     } catch (err) {
       console.error("Error updating estado:", err);
       toast.error("Error al actualizar el estado de la oferta", { description: err instanceof Error ? err.message : String(err) });
+      throw err;
     } finally {
       setUpdatingId(null);
     }
@@ -131,6 +140,11 @@ function OfertasPageInner() {
     );
   }
 
+  const bloques = [
+    { key: "no_firmada" as const, titulo: ETIQUETA_GRUPO.no_firmada, items: grupos.noFirmada },
+    { key: "firmada" as const, titulo: ETIQUETA_GRUPO.firmada, items: grupos.firmada },
+  ];
+
   return (
     <>
       <div className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-border bg-white px-6">
@@ -141,14 +155,16 @@ function OfertasPageInner() {
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted">Estado</label>
+          <label htmlFor="filtro-estado-oferta" className="text-[10px] font-semibold uppercase tracking-wider text-muted">Estado</label>
           <select
+            id="filtro-estado-oferta"
             value={fEstado}
-            onChange={(e) => setFEstado(e.target.value as OfertaRow["estado"] | "")}
+            onChange={(e) => setFEstado(e.target.value as OfertaEstado | "")}
             className="rounded-md border border-border bg-cream2 px-2.5 py-1.5 text-xs text-text outline-none focus:border-navy"
           >
-            {ESTADO_FILTRO.map((e) => (
-              <option key={e || "all"} value={e}>{e || "Todos"}</option>
+            <option value="">Todos</option>
+            {OFERTA_ESTADOS.map((estado) => (
+              <option key={estado} value={estado}>{ETIQUETA_ESTADO[estado]}</option>
             ))}
           </select>
         </div>
@@ -175,7 +191,7 @@ function OfertasPageInner() {
           <div className="py-16 text-center">
             <FileText size={40} className="mx-auto mb-3 text-border" />
             <p className="text-sm text-muted">
-              {assetFilter ? "No hay ofertas para este activo" : "No hay ofertas pendientes"}
+              {assetFilter ? "No hay ofertas para este activo" : "No hay ofertas"}
             </p>
             {assetFilter ? (
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
@@ -199,187 +215,150 @@ function OfertasPageInner() {
             ) : null}
           </div>
         ) : (
-          <div className="space-y-3">
-            {filteredOfertas.map(oferta => {
-              const comprador = oferta.comprador_id ? compradores.get(oferta.comprador_id) : undefined;
-              const agente = oferta.vendedor_id ? vendedoresMap.get(oferta.vendedor_id) : undefined;
-              const asset = assetsMap.get(oferta.asset_id);
-              if (!asset) return null;
-              if (!comprador && !agente && !oferta.vendedor_id) return null;
-
-              const actorNombre = (comprador ? nombreVisible(comprador) : "")
-                || agente?.nombre
-                || (oferta.vendedor_id ? "Agente" : "—");
-              const actorEmail = comprador?.email ?? agente?.email ?? "";
-              const actorIni = comprador?.ini ?? agente?.ini ?? "AG";
-              const actorCol = comprador?.col ?? agente?.col ?? "#1e3a5f,#3d6b9f";
-              const actorHref = comprador
-                ? `/admin/compradores/${comprador.id}`
-                : oferta.vendedor_id
-                  ? `/admin/agentes/${oferta.vendedor_id}`
-                  : null;
-
-              const estadoColors: Record<OfertaRow["estado"], string> = {
-                pendiente: "bg-blue/10 text-blue",
-                validada: "bg-green/10 text-green",
-                rechazada: "bg-red/10 text-red",
-                nda_enviado: "bg-gold/10 text-gold",
-                nda_firmado: "bg-green/10 text-green",
-              };
-
-              return (
-                <div
-                  key={oferta.id}
-                  className="rounded-lg border border-border bg-white p-5 shadow-sm"
-                >
-                  <div className="mb-4 flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="mb-2 flex items-center gap-3">
-                        <div
-                          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-                          style={{ background: `linear-gradient(135deg,${actorCol})` }}
-                        >
-                          {actorIni}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            {actorHref ? (
-                              <Link
-                                href={actorHref}
-                                className="text-sm font-semibold text-navy hover:underline"
-                              >
-                                {comprador ? actorNombre : `Agente: ${actorNombre}`}
-                              </Link>
-                            ) : (
-                              <span className="text-sm font-semibold text-navy">
-                                {oferta.vendedor_id ? `Agente: ${actorNombre}` : actorNombre}
-                              </span>
-                            )}
-                            <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${estadoColors[oferta.estado]}`}>
-                              {oferta.estado.replace("_", " ")}
-                            </span>
-                          </div>
-                          <div className="text-xs text-muted">{actorEmail}</div>
-                        </div>
-                      </div>
-                      <div className="ml-12">
-                        <Link
-                          href={`/admin/assets/${asset.id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm font-medium text-navy hover:underline"
-                        >
-                          {asset.pob}, {asset.prov} — {asset.id}
-                          <span className="sr-only"> (se abre en una pestaña nueva)</span>
-                        </Link>
-                        <div className="mt-1 flex items-center gap-4 text-xs text-muted">
-                          <span>Tipo: {asset.tip}</span>
-                          {asset.precio && <span>Precio estimado: {fmt(asset.precio)}</span>}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="ml-4 text-right">
-                      <div className="mb-1 flex items-center gap-1.5 text-lg font-bold text-gold">
-                        <Euro size={16} />
-                        {oferta.propuesta_euros.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </div>
-                      <div className="text-[10px] text-muted">
-                        {new Date(oferta.created_at).toLocaleDateString("es-ES", {
-                          day: "2-digit",
-                          month: "short",
-                          year: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </div>
-                    </div>
-                  </div>
-
-                  {oferta.comentarios && (
-                    <div className="mb-4 ml-12 rounded-md bg-cream2 px-3 py-2">
-                      <CommentByline
-                        author={oferta.comentarios_author}
-                        authorRole={oferta.comentarios_author_role}
-                        createdAt={oferta.created_at}
+          <div className="space-y-8">
+            {bloques.map((bloque) => (
+              bloque.items.length === 0 ? null : (
+                <section key={bloque.key} data-testid={`grupo-ofertas-${bloque.key}`}>
+                  <h2 className="mb-3 text-[10px] font-semibold uppercase tracking-[1.5px] text-gold">
+                    {bloque.titulo} ({bloque.items.length})
+                  </h2>
+                  <div className="space-y-3">
+                    {bloque.items.map((oferta) => (
+                      <OfertaCard
+                        key={oferta.id}
+                        oferta={oferta}
+                        comprador={oferta.comprador_id ? compradores.get(oferta.comprador_id) : undefined}
+                        agenteNombre={oferta.vendedor_id ? vendedoresMap.get(oferta.vendedor_id)?.nombre : undefined}
+                        asset={assetsMap.get(oferta.asset_id)}
+                        updating={updatingId === oferta.id}
+                        onEstado={(cambio) => handleEstadoChange(oferta.id, cambio)}
                       />
-                      <p className="mt-1 text-xs text-text">{oferta.comentarios}</p>
-                    </div>
-                  )}
-
-                  <div className="ml-12 flex flex-wrap items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <label htmlFor={`estado-${oferta.id}`} className="text-[10px] font-semibold uppercase tracking-wider text-muted">
-                        Cambiar estado
-                      </label>
-                      <select
-                        id={`estado-${oferta.id}`}
-                        value={oferta.estado}
-                        disabled={updatingId === oferta.id}
-                        onChange={(e) => void handleEstadoChange(oferta.id, e.target.value as OfertaRow["estado"])}
-                        className="rounded-md border border-border bg-cream2 px-2.5 py-1.5 text-xs text-text outline-none focus:border-navy disabled:opacity-50"
-                      >
-                        {ESTADO_OPCIONES.map((e) => (
-                          <option key={e} value={e}>{e.replace(/_/g, " ")}</option>
-                        ))}
-                      </select>
-                    </div>
-                    {oferta.estado === "pendiente" && (
-                      <>
-                        <button
-                          type="button"
-                          disabled={updatingId === oferta.id}
-                          onClick={() => void handleEstadoChange(oferta.id, "validada")}
-                          className="flex items-center gap-1.5 rounded-lg bg-green px-3 py-1.5 text-xs font-medium text-white hover:bg-green/90 disabled:opacity-50"
-                        >
-                          <CheckCircle2 size={14} /> Validar
-                        </button>
-                        <button
-                          type="button"
-                          disabled={updatingId === oferta.id}
-                          onClick={() => void handleEstadoChange(oferta.id, "rechazada")}
-                          className="flex items-center gap-1.5 rounded-lg bg-red px-3 py-1.5 text-xs font-medium text-white hover:bg-red/90 disabled:opacity-50"
-                        >
-                          <XCircle size={14} /> Rechazar
-                        </button>
-                        <button
-                          type="button"
-                          disabled={updatingId === oferta.id}
-                          onClick={() => void handleEstadoChange(oferta.id, "nda_enviado")}
-                          className="flex items-center gap-1.5 rounded-lg bg-gold px-3 py-1.5 text-xs font-medium text-white hover:bg-gold2 disabled:opacity-50"
-                        >
-                          <Send size={14} /> Enviar NDA
-                        </button>
-                      </>
-                    )}
-                    {oferta.estado === "validada" && (
-                      <button
-                        type="button"
-                        disabled={updatingId === oferta.id}
-                        onClick={() => void handleEstadoChange(oferta.id, "nda_enviado")}
-                        className="flex items-center gap-1.5 rounded-lg bg-gold px-3 py-1.5 text-xs font-medium text-white hover:bg-gold2 disabled:opacity-50"
-                      >
-                        <Send size={14} /> Enviar NDA
-                      </button>
-                    )}
-                    {oferta.estado === "nda_enviado" && (
-                      <div className="flex items-center gap-2 rounded-lg bg-gold/10 px-3 py-1.5 text-xs text-gold">
-                        <AlertCircle size={14} />
-                        NDA enviado. Esperando firma del cliente.
-                      </div>
-                    )}
-                    {oferta.estado === "nda_firmado" && (
-                      <div className="flex items-center gap-2 rounded-lg bg-green/10 px-3 py-1.5 text-xs text-green">
-                        <CheckCircle2 size={14} />
-                        NDA firmado el {new Date(oferta.nda_firmado_at!).toLocaleDateString("es-ES")}
-                      </div>
-                    )}
+                    ))}
                   </div>
-                </div>
-              );
-            })}
+                </section>
+              )
+            ))}
           </div>
         )}
       </div>
     </>
+  );
+}
+
+function OfertaCard({
+  oferta,
+  comprador,
+  agenteNombre,
+  asset,
+  updating,
+  onEstado,
+}: {
+  oferta: OfertaRow;
+  comprador: Comprador | undefined;
+  agenteNombre: string | undefined;
+  asset: Asset | undefined;
+  updating: boolean;
+  onEstado: (cambio: {
+    estado: OfertaEstado;
+    importe?: number;
+    nota?: string;
+    fechaFirma?: string;
+  }) => Promise<void>;
+}) {
+  if (!asset) return null;
+  const actorNombre = (comprador ? nombreVisible(comprador) : "") || agenteNombre || (oferta.vendedor_id ? "Agente" : "—");
+  const actorEmail = comprador?.email ?? "";
+  const actorIni = comprador?.ini ?? "AG";
+  const actorCol = comprador?.col ?? "#1e3a5f,#3d6b9f";
+  const agente = comprador?.agente?.trim() || agenteNombre || "Gestor";
+  const color = ESTADO_COLOR[oferta.estado] ?? "bg-cream text-muted";
+
+  return (
+    <div className="rounded-lg border border-border bg-white p-5 shadow-sm">
+      <div className="mb-4 flex items-start justify-between">
+        <div className="flex-1">
+          <div className="mb-2 flex items-center gap-3">
+            <div
+              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+              style={{ background: `linear-gradient(135deg,${actorCol})` }}
+            >
+              {actorIni}
+            </div>
+            <div className="flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                {comprador ? (
+                  <Link href={`/admin/compradores/${comprador.id}`} className="text-sm font-semibold text-navy hover:underline">
+                    {actorNombre}
+                  </Link>
+                ) : (
+                  <span className="text-sm font-semibold text-navy">{oferta.vendedor_id ? `Agente: ${actorNombre}` : actorNombre}</span>
+                )}
+                <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${color}`}>
+                  {etiquetaEstado(oferta.estado)}
+                </span>
+              </div>
+              <div className="text-xs text-muted">{actorEmail || `Agente: ${agente}`}</div>
+            </div>
+          </div>
+          <div className="ml-12">
+            <Link
+              href={`/admin/assets/${asset.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-medium text-navy hover:underline"
+            >
+              {asset.pob}, {asset.prov} — {asset.id}
+              <span className="sr-only"> (se abre en una pestaña nueva)</span>
+            </Link>
+            <div className="mt-1 flex flex-wrap items-center gap-4 text-xs text-muted">
+              <span>Tipo: {asset.tip}</span>
+              {asset.precio ? <span>Precio estimado: {fmt(asset.precio)}</span> : null}
+              <span>Agente: {agente}</span>
+            </div>
+          </div>
+        </div>
+        <div className="ml-4 text-right">
+          <div className="mb-1 flex items-center gap-1.5 text-lg font-bold text-gold">
+            <Euro size={16} />
+            {oferta.propuesta_euros.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
+          <div className="text-[10px] text-muted">
+            {new Date(oferta.created_at).toLocaleDateString("es-ES", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </div>
+          {oferta.fecha_firma ? (
+            <div className="mt-1 text-[10px] text-green">
+              Firma {new Date(oferta.fecha_firma).toLocaleDateString("es-ES")}
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {oferta.comentarios ? (
+        <div className="mb-4 ml-12 rounded-md bg-cream2 px-3 py-2">
+          <CommentByline
+            author={oferta.comentarios_author}
+            authorRole={oferta.comentarios_author_role}
+            createdAt={oferta.created_at}
+          />
+          <p className="mt-1 text-xs text-text">{oferta.comentarios}</p>
+        </div>
+      ) : null}
+
+      <div className="ml-12">
+        <OfertaEstadoForm
+          estado={oferta.estado}
+          importeActual={oferta.propuesta_euros}
+          disabled={updating}
+          onSubmit={onEstado}
+        />
+        <OfertaHistorialLista historial={oferta.historial} />
+      </div>
+    </div>
   );
 }
