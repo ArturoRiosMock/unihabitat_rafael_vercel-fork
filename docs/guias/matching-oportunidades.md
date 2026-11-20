@@ -28,7 +28,7 @@ Score máximo cap: 100.
 
 ## Onde ver no admin
 
-**`/admin/oportunidades`** — lista matches; pode recalcular scores por imóvel ou comprador.
+**`/admin/oportunidades`** — lista matches do scoring e, para o gestor, o cruce de demanda (categoria, província e população). Ver [cruce-demanda.md](../fluxos-tecnicos/cruce-demanda.md).
 
 ## Quando se calcula
 

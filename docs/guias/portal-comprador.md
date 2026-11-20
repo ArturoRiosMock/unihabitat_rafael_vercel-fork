@@ -36,6 +36,7 @@ O comprador vê:
 - **Solicitar información** — formulario → email interno ([`email-info-request.ts`](../../src/app/actions/email-info-request.ts))
 - **Submeter oferta** — valor em € + comentários → fluxo em `/portal/privado/ofertas`. O comentário mostra autor e data/hora (admin lê-se «Gestor»). A oferta traz a ficha do comprador já preenchida (nome, apelidos, documento, morada, telefone, email). Se faltar algum dado obrigatório, o formulário pede-o e grava-o na ficha antes de enviar. Com a ficha completa, só se revê e envia
 - **Mis datos** (`/portal/privado/datos`) — o comprador edita essa ficha e vê «Datos completos» ou «Faltan: …»
+- **Mi demanda** (`/portal/privado/demanda`) — categorias, províncias, populações e intervalo de preço. Vê as oportunidades já oferecidas e marca interessado ou descartada. O email semanal só sai se `CRUCE_DEMANDA_EMAIL_ENABLED` estiver ativo; o link é a ficha pública
 - **Documentos** — só se o comprador está convidado a esse activo (`comprador_assets`). Sem convite, a ficha pública continua visível e a documentação mostra «Acceso denegado»: não há formulário de NDA nem ficheiros. Com convite, aceita o NDA **desse** activo (texto provisional, versão em `src/lib/nda.ts`) antes de listar ou descarregar. Sem aceitação o servidor não devolve a lista nem a URL firmada. Documentos sem `asset_id` que já sejam só dele continuam visíveis. O agente não muda: continua a depender de `vendedor_assets` e do NDA do activo.
 
 ## Ofertas (`/portal/privado/ofertas`)

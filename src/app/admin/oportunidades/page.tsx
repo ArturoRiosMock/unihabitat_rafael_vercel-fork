@@ -6,11 +6,12 @@ import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { Zap, RefreshCw } from "lucide-react";
 import { nombreVisible } from "@/lib/comprador-oferta";
+import { CruceDemandaPanel } from "@/components/CruceDemandaPanel";
 
 interface OpRow { id: string; comprador_id: string; asset_id: string; score: number; estado: string; created_at: string }
 
 export default function OportunidadesPage() {
-  const { assets, compradores } = useApp();
+  const { assets, compradores, session } = useApp();
   const supabase = createClient();
   const [ops, setOps] = useState<OpRow[]>([]);
   const [computing, setComputing] = useState(false);
@@ -50,7 +51,8 @@ export default function OportunidadesPage() {
       </div>
 
       <div className="p-5">
-        <p className="mb-4 text-xs text-muted">Relación automática de compradores con activos según criterios de búsqueda, provincia, tipología y presupuesto.</p>
+        {session?.role === "admin" ? <CruceDemandaPanel /> : null}
+        <p className="mb-4 text-xs text-muted">El listado de abajo es el scoring anterior (intereses en texto libre). El cruce de demanda usa la ficha estructurada del comprador.</p>
 
         <div className="overflow-hidden rounded-lg border border-border bg-white shadow-sm">
           <div className="grid grid-cols-[2fr_2fr_80px_100px_120px] items-center gap-2 bg-navy px-4 py-2.5">

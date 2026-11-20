@@ -433,6 +433,65 @@ export interface NotificationMirrorInput {
   appUrl?: string;
 }
 
+export interface OportunidadEmailItem {
+  titulo: string;
+  lugar: string;
+  precioLabel: string | null;
+  url: string;
+  nivel: string;
+}
+
+export interface OportunidadesDemandaInput {
+  nombre: string;
+  oportunidades: OportunidadEmailItem[];
+}
+
+/**
+ * Resumen para el comprador. Solo datos de la ficha pública
+ * (tipología, población, provincia, precio y enlace). Sin referencia
+ * catastral, deuda ni documentación sujeta a NDA.
+ */
+export function oportunidadesDemandaTemplate(input: OportunidadesDemandaInput): EmailTemplate {
+  const total = input.oportunidades.length;
+  const subject = total === 1
+    ? "[Unihabitat] Una oportunidad según tu demanda"
+    : `[Unihabitat] ${total} oportunidades según tu demanda`;
+  const items = input.oportunidades.map((item) => `
+    <tr>
+      <td style="padding:12px 0;border-bottom:1px solid ${BORDER};">
+        <div style="font-size:14px;font-weight:bold;color:${NAVY};">${escapeHtml(item.titulo)}</div>
+        <div style="font-size:13px;color:${TEXT};margin-top:2px;">${escapeHtml(item.lugar)}</div>
+        ${item.precioLabel ? `<div style="font-size:13px;color:${TEXT};margin-top:2px;">${escapeHtml(item.precioLabel)}</div>` : ""}
+        <div style="margin-top:8px;"><a href="${escapeHtml(item.url)}" style="color:${NAVY};font-size:13px;font-weight:bold;">Ver ficha pública</a></div>
+      </td>
+    </tr>`).join("");
+  const bodyHtml = `
+    <p style="margin:0 0 14px 0;">Hola ${escapeHtml(input.nombre)},</p>
+    <p style="margin:0 0 14px 0;">Estas oportunidades encajan con la demanda que tienes registrada. El enlace abre la ficha pública: la documentación del activo sigue sujeta a acceso y NDA.</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${items}</table>
+    <p style="margin:18px 0 0 0;color:${MUTED};font-size:12px;">Puedes marcar interesado o descartar cada una en tu zona privada.</p>
+  `;
+  const html = baseLayout({
+    preheader: subject,
+    banner: "Tu demanda",
+    bodyHtml,
+  });
+  const text = [
+    `Hola ${input.nombre},`,
+    "",
+    "Estas oportunidades encajan con tu demanda. La ficha es pública; la documentación requiere acceso y NDA.",
+    "",
+    ...input.oportunidades.flatMap((item) => [
+      item.titulo,
+      item.lugar,
+      item.precioLabel ?? "",
+      item.url,
+      "",
+    ]),
+  ].filter((line) => line !== undefined).join("\n");
+  return { subject, html, text };
+}
+
 export function notificationMirrorTemplate(input: NotificationMirrorInput): EmailTemplate {
   const label = TIPO_LABEL[input.tipo] ?? "Nueva notificación";
   const subject = `[Unihabitat] ${label}`;

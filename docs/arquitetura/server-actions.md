@@ -74,6 +74,20 @@ Todas em `src/app/actions/`. Padrão: `"use server"`, auth via `auth-server.ts`,
 | `computeMatchesForComprador` | Recalcular matches de um comprador |
 | `fetchOportunidadesByAsset` / `fetchOportunidadesByComprador` | Listar oportunidades |
 
+## Cruce de demanda
+
+**[`cruce-demanda.ts`](../../src/app/actions/cruce-demanda.ts)** — devolve `{ ok, error }`. Tipos em `src/lib/cruce-demanda.ts`.
+
+| Função | Descrição |
+|--------|-----------|
+| `fetchDemandaComprador` / `guardarDemandaComprador` | Admin, agente atribuído ou o próprio comprador |
+| `fetchOportunidadesComprador` | Oportunidades já oferecidas |
+| `buscarOportunidadesComprador` | Pré-visualiza sem gravar. Admin ou agente atribuído |
+| `registrarOportunidadesComprador` | Grava as novas. Email só com `CRUCE_DEMANDA_EMAIL_ENABLED` |
+| `marcarOportunidadEstado` | Comprador: `interesado` ou `descartada`. Staff com acesso: qualquer estado |
+| `fetchCompradoresEncajeActivo` | Só o gestor, na ficha do ativo |
+| `fetchUltimoCruceDemanda` / `lanzarCruceDemandaManual` | Só o gestor |
+
 ## Ofertas
 
 **[`ofertas.ts`](../../src/app/actions/ofertas.ts)**

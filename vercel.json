@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/reasignar-compradores",
       "schedule": "15 4 * * *"
+    },
+    {
+      "path": "/api/cron/cruce-demanda",
+      "schedule": "0 7 * * 1,4"
     }
   ]
 }

@@ -43,6 +43,7 @@ import { fmt } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { datosFirmaFromComprador, nombreVisible, type DatosFirma } from "@/lib/comprador-oferta";
 import { DatosFirmaFields, DatosOfertaEstado } from "@/components/DatosFirmaFields";
+import { DemandaBloque } from "@/components/DemandaBloque";
 
 const tabs = [
   { icon: User, label: "Datos" },
@@ -333,6 +334,8 @@ function TabDatos({ c, isAgente }: { c: Comprador; isAgente: boolean }) {
       <div className="mb-4">
         <FichaCompradorCard c={c} />
       </div>
+
+      <DemandaBloque compradorId={c.id} modo="staff" />
 
       {isAgente ? null : (
         <div className="mb-4">

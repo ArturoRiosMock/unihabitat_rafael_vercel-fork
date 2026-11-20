@@ -38,6 +38,7 @@ import { toast } from "@/lib/toast";
 import { datosFirmaCompletos, datosFirmaFromComprador, datosFirmaVacios, nombreVisible, type DatosFirma } from "@/lib/comprador-oferta";
 import { OfertaDatosComprador } from "@/components/OfertaDatosComprador";
 import { AssetClientesBloques } from "@/components/AssetClientesBloques";
+import { AssetDemandaEncaje } from "@/components/AssetDemandaEncaje";
 
 const tabs = [
   { icon: Home,       label: "Características", adminOnly: false, contentIndex: 0 },
@@ -1314,6 +1315,7 @@ function TabClientes({ assetId }: { assetId: string }) {
   return (
     <>
       <AssetClientesBloques assetId={assetId} />
+      <AssetDemandaEncaje assetId={assetId} />
       <div className="mb-3 flex items-center justify-between">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
           Clientes con acceso ({invitedIds.size})

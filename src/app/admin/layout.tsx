@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import {
   Building2, ShoppingCart, Handshake, CheckSquare, BarChart3,
-  Settings, LogOut, FileText, BookOpen, type LucideIcon,
+  Settings, LogOut, FileText, BookOpen, Zap, type LucideIcon,
 } from "lucide-react";
 import { signOut } from "@/app/login/actions";
 import { canViewSection } from "@/lib/auth-helpers";
@@ -31,6 +31,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { href: "/admin/agentes",      label: "Agentes",     icon: Handshake,    sectionId: "agentes" },
   { href: "/admin/tareas",       label: "Tareas",      icon: CheckSquare,  sectionId: "tareas", sep: true },
   { href: "/admin/ofertas",      label: "Ofertas",     icon: FileText,     sectionId: "ofertas" },
+  { href: "/admin/oportunidades", label: "Cruce",      icon: Zap,          sectionId: "oportunidades" },
   { href: "/admin/informes",     label: "Informes",    icon: BarChart3,    sectionId: "informes" },
   { href: "/admin/config",       label: "Config",      icon: Settings,     sectionId: "config", sep: true },
   {

@@ -64,6 +64,7 @@ flowchart TB
 | [Importação Excel](fluxos-tecnicos/importacao-excel.md) | Parser `parseTemplateExcel`, upsert |
 | [Enriquecimento Catastro](fluxos-tecnicos/enriquecimento-catastro.md) | DNP + Geoapify (manual) |
 | [Matching engine](fluxos-tecnicos/matching-engine.md) | Scoring comprador ↔ imóvel |
+| [Cruce de demanda](fluxos-tecnicos/cruce-demanda.md) | Categoria, província e população, 2 vezes por semana |
 | [Email e notificações](fluxos-tecnicos/email-notificacoes.md) | Resend, templates, dry-run |
 
 ## Operações

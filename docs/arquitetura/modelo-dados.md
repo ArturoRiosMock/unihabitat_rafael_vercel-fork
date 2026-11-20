@@ -67,7 +67,10 @@ Campos que antes viviam em `asset.adm.*` devem ser lidos de `asset.propiedades[]
 | Comprador | `compradores` | Ligado a `auth.users`; interesses, presupuesto, NDA. `nombre` é o nome próprio e `apellidos` os apelidos (a migração parte o nome antigo pelo primeiro espaço). `nombre_completo` é gerado. Para a oferta ficar pronta a assinar: DNI/NIE/CIF (`documento`), tipo de pessoa, razão social se for jurídica, morada, CP, população, província, país, telefone e email. `ultima_gestion_agente_at` é a última gestão do agente atribuído (90 dias; ver auth). `reasignado_inactividad_at` regista a passagem ao gestor |
 | Vendedor | `vendedores` | Agente; convite via Supabase Auth |
 | Tarea | `tareas` | Tarefas internas |
-| Oportunidade | `oportunidades` | Match com score |
+| Oportunidade | `oportunidades` | Match com score (texto livre `intereses`) |
+| Demanda | `comprador_demanda` | Categorias, províncias, populações e intervalo de preço. Não usa a morada de firma |
+| Oportunidade oferecida | `comprador_oportunidades` | Ativo já oferecido ao comprador (nível, canal, estado). Único por comprador e ativo |
+| Execução do cruce | `cruce_demanda_ejecuciones` | Último lote do cron ou do gestor |
 | Oferta | `ofertas` | Uma proposta por comprador e activo. Estados: `realizada`, `contraofertada`, `rechazada` (não firmada) e `aceptada`, `pbc_solicitada`, `firmada` (firmada; `fecha_firma` obrigatória). O valor antigo fica em `estado_legacy`. `nda_enviado_at` / `nda_firmado_at` não se apagam. A contraoferta actualiza a mesma fila |
 | Notificacion | `notificaciones` | Alertas in-app (+ email espelhado) |
 | Nota | `notas` | `scope`: `activo` (Características; cada agente vê as suas, admin todas) ou `privada` (só admin). `author_id` e `author_role` = quem criou. Na UI, rol `admin` lê-se «Gestor». «Mis notas» do portal leva `comprador_id`. DELETE só admin |
@@ -100,6 +103,7 @@ Todo acesso DB passa por [`src/lib/supabase/db.ts`](../../src/lib/supabase/db.ts
 | `supabase/migrations/20261109_notas_select_visibilidad.sql` | SELECT: agente só as suas; comprador só as suas; privadas só via admin |
 | `supabase/migrations/20261119_comentarios_autor_y_actividad.sql` | `author_role` em notas, autor da informação adicional e do comentário da oferta, tabela `comprador_comentarios` |
 | `supabase/migrations/20261119b_nda_aceptaciones_activo.sql` | `asset_nda_aceptaciones`: NDA por activo para abrir a documentação. Idempotente. Staging; não produção neste passo |
+| `supabase/migrations/20261119g_comprador_demanda_cruce.sql` | `comprador_demanda`, `comprador_oportunidades` (único comprador+ativo) e `cruce_demanda_ejecuciones`. RLS: admin tudo; agente via `vendedor_compradores`; comprador só as suas. Idempotente. Staging; não produção neste passo |
 
 Ver [migrations-supabase.md](../operacoes/migrations-supabase.md).
 

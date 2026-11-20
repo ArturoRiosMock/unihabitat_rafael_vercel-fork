@@ -28,6 +28,7 @@
 | Mudança de estado da oferta | — | Não envia email ao comprador (`OFERTA_ESTADO_EMAIL_COMPRADOR` está desligado) |
 | Notificação in-app | `notificaciones.ts` | Espelho email ao utilizador |
 | Convite agente | `agente-invite.ts` | Email Supabase magic link |
+| Cruce de demanda | `cruce-demanda` cron ou registo manual | Comprador, com cópia ao agente. Só se `CRUCE_DEMANDA_EMAIL_ENABLED=true`. Corpo com ficha pública (sem dívida nem referência). `EMAIL_DRY_RUN` continua a valer |
 
 Ofertas **sem vendedor atribuído** → assunto marcado + envio para suporte.
 

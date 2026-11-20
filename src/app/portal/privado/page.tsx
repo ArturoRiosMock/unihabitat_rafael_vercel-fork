@@ -13,7 +13,7 @@ import { assetPrivateHref } from "@/lib/public-slug";
 import { shouldBackfillMapFromAddress } from "@/lib/map-default";
 import { useFavoritos } from "@/hooks/useFavoritos";
 import Link from "next/link";
-import { Building, MapPin, LogIn, LogOut, FileText, Star, User } from "lucide-react";
+import { Building, MapPin, LogIn, LogOut, FileText, Star, User, Search } from "lucide-react";
 import { InteractiveMap } from "@/components/InteractiveMap";
 
 export default function PortalPrivadoPage() {
@@ -272,6 +272,15 @@ export default function PortalPrivadoPage() {
             <div>
               <div className="text-sm font-semibold text-navy">Mis datos</div>
               <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">Para firmar ofertas</div>
+            </div>
+          </div>
+        </Link>
+        <Link href="/portal/privado/demanda" className="rounded-lg border border-border bg-white p-5 shadow-sm transition-all hover:shadow-md">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-navy/10 text-navy"><Search size={20} /></div>
+            <div>
+              <div className="text-sm font-semibold text-navy">Mi demanda</div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">Oportunidades</div>
             </div>
           </div>
         </Link>

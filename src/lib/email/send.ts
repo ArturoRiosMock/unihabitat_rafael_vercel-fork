@@ -7,6 +7,8 @@ export interface SendEmailParams {
   text: string;
   replyTo?: string;
   from?: string;
+  /** Copia, por ejemplo el agente asignado al comprador. */
+  cc?: string | string[];
 }
 
 export interface SendEmailResult {
@@ -18,10 +20,13 @@ export interface SendEmailResult {
 export async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
   const to = Array.isArray(params.to) ? params.to : [params.to];
 
+  const cc = params.cc == null ? undefined : (Array.isArray(params.cc) ? params.cc : [params.cc]).filter(Boolean);
+
   if (EMAIL_DRY_RUN) {
     console.info("[email:dry-run]", {
       from: params.from ?? EMAIL_FROM,
       to,
+      cc,
       subject: params.subject,
       replyTo: params.replyTo,
     });
@@ -33,6 +38,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
     const { data, error } = await resend.emails.send({
       from: params.from ?? EMAIL_FROM,
       to,
+      cc: cc && cc.length > 0 ? cc : undefined,
       subject: params.subject,
       html: params.html,
       text: params.text,

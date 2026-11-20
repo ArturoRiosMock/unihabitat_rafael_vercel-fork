@@ -53,6 +53,7 @@ Tests live in `src/__tests__/`. Standalone helpers: `catastro.py`, `scripts/` (`
 ### Key modules
 
 - **Matching** (`src/lib/matching.ts`, `src/app/actions/matching.ts`) — buyer-asset scoring; threshold 25
+- **Cruce de demanda** (`src/lib/cruce-demanda.ts`, `src/app/actions/cruce-demanda.ts`, `GET /api/cron/cruce-demanda`) — categoría, provincia y población; lunes y jueves 07:00 UTC. Email solo con `CRUCE_DEMANDA_EMAIL_ENABLED`
 - **Excel import** (`src/lib/normalize-excel.ts`) — `parseTemplateExcel()` for CDR/NPL master template only (legacy Proveedor 1/2/3 removed). 1 Excel row → 1 Propiedad; same Referencia → 1 Asset (merge fill-empty). Upload: parse → `upsertAssets` + `upsertPropiedades` in [`UploadActivosModal.tsx`](src/app/admin/UploadActivosModal.tsx)
 - **Catastro** (`src/lib/catastro/`, `src/app/actions/catastro.ts`, `maps.ts`) — manual enrichment via Spanish cadastre DNP + Geoapify; not automatic on Excel upload
 - **Email** (`src/lib/email/`) — Resend; `EMAIL_DRY_RUN` for dev

@@ -13,6 +13,8 @@ export function actionError(error: unknown, fallback: string): ActionFailure {
  * El fallo ya viene en `error`. Se lanza en el cliente para que el aviso
  * muestre ese texto: un `throw` dentro de la server action llega como digest.
  */
-export function raiseActionError(result: { ok: boolean; error?: string }): void {
+export function raiseActionError<T extends { ok: boolean; error?: string }>(
+  result: T,
+): asserts result is Extract<T, { ok: true }> {
   if (!result.ok) throw new Error(result.error || "No se pudo completar la acción");
 }

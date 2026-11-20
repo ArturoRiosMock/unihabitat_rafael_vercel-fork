@@ -38,7 +38,9 @@ Sem `RESEND_API_KEY`, `sendEmail()` devolve `ok: false` com mensagem clara.
 
 | Variável | Default | Descrição |
 |----------|---------|-----------|
-| `CRON_SECRET` | — | Segredo da rota `GET /api/cron/reasignar-compradores`. A Vercel envia `Authorization: Bearer <CRON_SECRET>`. Sem o valor, a rota responde 401. O cron está em `vercel.json` (todos os dias às 04:15 UTC). O listado de compradores também corre a mesma função ao abrir. |
+| `CRON_SECRET` | — | Segredo das rotas `GET /api/cron/reasignar-compradores` e `GET /api/cron/cruce-demanda`. A Vercel envia `Authorization: Bearer <CRON_SECRET>`. Sem o valor, a rota responde 401. O cron de inatividade está em `vercel.json` (todos os dias às 04:15 UTC). O cruce de demanda corre segunda e quinta às 07:00 UTC (08:00 CET / 09:00 CEST). |
+| `CRUCE_DEMANDA_EMAIL_ENABLED` | `false` | `true` envia o resumo de oportunidades ao comprador (cópia ao agente). Qualquer outro valor, ou a variável ausente, só grava no CRM. |
+| `CRUCE_DEMANDA_LIMITE` | `5` | Máximo de oportunidades novas por comprador em cada envio (teto 50). |
 
 ## URLs públicas
 
