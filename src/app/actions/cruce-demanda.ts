@@ -267,6 +267,7 @@ export async function lanzarCruceDemandaManual(): Promise<ActionResult<{ ejecuci
         porNivel: resultado.porNivel,
         emailsEnviados: resultado.emailsEnviados,
         emailsOmitidos: resultado.emailsOmitidos,
+        createdAt: resultado.createdAt,
       },
     };
   } catch (err) {

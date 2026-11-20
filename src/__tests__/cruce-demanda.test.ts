@@ -256,6 +256,8 @@ describe("registro sin repetir y email detrás del flag", () => {
     });
     expect(primera.oportunidades).toBe(1);
     expect(primera.porNivel.poblacion).toBe(1);
+    expect(primera.createdAt).toEqual(expect.any(String));
+    expect(Number.isNaN(Date.parse(primera.createdAt ?? ""))).toBe(false);
     expect(segunda.oportunidades).toBe(0);
     expect(inserts).toHaveLength(1);
   });

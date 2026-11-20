@@ -224,6 +224,7 @@ export function supabaseCruceStore(sb: SupabaseClient): CruceStore {
         por_nivel: row.porNivel,
         emails_enviados: row.emailsEnviados,
         emails_omitidos: row.emailsOmitidos,
+        ...(row.createdAt ? { created_at: row.createdAt } : {}),
       });
       if (error) throw new Error(error.message);
     },

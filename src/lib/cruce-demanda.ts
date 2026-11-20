@@ -663,6 +663,7 @@ export async function ejecutarCruce(
     porNivel,
     emailsEnviados,
     emailsOmitidos,
+    createdAt: new Date().toISOString(),
     detalles,
   };
 
