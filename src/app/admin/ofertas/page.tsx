@@ -4,7 +4,7 @@ import { Suspense, useState, useEffect, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useApp } from "@/lib/context";
 import { raiseActionError } from "@/lib/action-result";
-import { fetchOfertas, updateOfertaEstado } from "@/app/actions/ofertas";
+import { fetchOfertas, updateOfertaEstado, updateOfertaSeguimiento } from "@/app/actions/ofertas";
 import { fetchCompradores } from "@/app/actions/compradores";
 import { fetchAssetByIdForAdmin } from "@/app/actions/assets";
 import type { Asset, Comprador } from "@/lib/types";
@@ -13,15 +13,19 @@ import { FileText, Loader2, Euro, X } from "lucide-react";
 import { fmt } from "@/lib/utils";
 import { CommentByline } from "@/components/CommentByline";
 import { OfertaEstadoForm, OfertaHistorialLista } from "@/components/OfertaEstadoForm";
+import { OfertaSeguimientoControl } from "@/components/OfertaSeguimientoControl";
 import { nombreVisible } from "@/lib/comprador-oferta";
 import {
   ETIQUETA_ESTADO,
   ETIQUETA_GRUPO,
+  ETIQUETA_SEGUIMIENTO,
   OFERTA_ESTADOS,
+  SEGUIMIENTOS_OFERTA,
   agruparOfertasPorFirma,
   etiquetaEstado,
   type OfertaEstado,
   type OfertaRow,
+  type SeguimientoOferta,
 } from "@/lib/oferta-workflow";
 import { toast } from "@/lib/toast";
 
@@ -56,6 +60,7 @@ function OfertasPageInner() {
   const [ofertas, setOfertas] = useState<OfertaRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [fEstado, setFEstado] = useState<OfertaEstado | "">("");
+  const [fSeguimiento, setFSeguimiento] = useState<SeguimientoOferta | "">("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [compradores, setCompradores] = useState<Map<string, Comprador>>(new Map());
   const [assetsMap, setAssetsMap] = useState<Map<string, Asset>>(new Map());
@@ -71,13 +76,13 @@ function OfertasPageInner() {
 
   useEffect(() => {
     loadData();
-  }, [fEstado, assetFilter]);
+  }, [fEstado, fSeguimiento, assetFilter]);
 
   async function loadData() {
     setLoading(true);
     try {
       const [ofertasData, compradoresData] = await Promise.all([
-        fetchOfertas(fEstado),
+        fetchOfertas(fEstado, fSeguimiento),
         fetchCompradores(),
       ]);
       setOfertas(ofertasData);
@@ -134,6 +139,23 @@ function OfertasPageInner() {
     }
   }
 
+  async function handleSeguimiento(ofertaId: string, seguimiento: SeguimientoOferta) {
+    setUpdatingId(ofertaId);
+    try {
+      const result = await updateOfertaSeguimiento(ofertaId, seguimiento);
+      raiseActionError(result);
+      await loadData();
+      toast.success("Seguimiento actualizado", { description: ETIQUETA_SEGUIMIENTO[seguimiento] });
+    } catch (err) {
+      toast.error("No se pudo cambiar el seguimiento", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -167,6 +189,18 @@ function OfertasPageInner() {
             <option value="">Todos</option>
             {OFERTA_ESTADOS.map((estado) => (
               <option key={estado} value={estado}>{ETIQUETA_ESTADO[estado]}</option>
+            ))}
+          </select>
+          <label htmlFor="filtro-seguimiento-oferta" className="text-[10px] font-semibold uppercase tracking-wider text-muted">Seguimiento</label>
+          <select
+            id="filtro-seguimiento-oferta"
+            value={fSeguimiento}
+            onChange={(e) => setFSeguimiento(e.target.value as SeguimientoOferta | "")}
+            className="rounded-md border border-border bg-cream2 px-2.5 py-1.5 text-xs text-text outline-none focus:border-navy"
+          >
+            <option value="">Todos</option>
+            {SEGUIMIENTOS_OFERTA.map((valor) => (
+              <option key={valor} value={valor}>{ETIQUETA_SEGUIMIENTO[valor]}</option>
             ))}
           </select>
         </div>
@@ -234,6 +268,7 @@ function OfertasPageInner() {
                         asset={assetsMap.get(oferta.asset_id)}
                         updating={updatingId === oferta.id}
                         onEstado={(cambio) => handleEstadoChange(oferta.id, cambio)}
+                        onSeguimiento={(valor) => handleSeguimiento(oferta.id, valor)}
                       />
                     ))}
                   </div>
@@ -254,6 +289,7 @@ function OfertaCard({
   asset,
   updating,
   onEstado,
+  onSeguimiento,
 }: {
   oferta: OfertaRow;
   comprador: Comprador | undefined;
@@ -266,6 +302,7 @@ function OfertaCard({
     nota?: string;
     fechaFirma?: string;
   }) => Promise<void>;
+  onSeguimiento: (valor: SeguimientoOferta) => Promise<void>;
 }) {
   if (!asset) return null;
   const actorNombre = (comprador ? nombreVisible(comprador) : "") || agenteNombre || (oferta.vendedor_id ? "Agente" : "—");
@@ -358,6 +395,11 @@ function OfertaCard({
           importeActual={oferta.propuesta_euros}
           disabled={updating}
           onSubmit={onEstado}
+        />
+        <OfertaSeguimientoControl
+          seguimiento={oferta.seguimiento}
+          disabled={updating}
+          onChange={onSeguimiento}
         />
         <OfertaHistorialLista historial={oferta.historial} />
       </div>

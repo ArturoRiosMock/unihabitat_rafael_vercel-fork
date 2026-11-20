@@ -20,6 +20,26 @@ export const OFERTA_ESTADOS = [
 
 export type OfertaEstado = (typeof OFERTA_ESTADOS)[number];
 
+/**
+ * Seguimiento comercial. No forma parte del workflow
+ * (realizada → … → firmada) y se puede cambiar en cualquier momento.
+ */
+export const SEGUIMIENTOS_OFERTA = [
+  "pendiente",
+  "en_seguimiento",
+  "enviado",
+  "sin_respuesta",
+] as const;
+
+export type SeguimientoOferta = (typeof SEGUIMIENTOS_OFERTA)[number];
+
+export const ETIQUETA_SEGUIMIENTO: Record<SeguimientoOferta, string> = {
+  pendiente: "Pendiente",
+  en_seguimiento: "En seguimiento",
+  enviado: "Enviado",
+  sin_respuesta: "Sin respuesta",
+};
+
 export type GrupoOferta = "no_firmada" | "firmada";
 
 export const ETIQUETA_ESTADO: Record<OfertaEstado, string> = {
@@ -58,6 +78,9 @@ export interface OfertaHistorialRow {
   nota: string | null;
   author: string | null;
   author_role: string | null;
+  /** Relleno solo cuando la fila registra un cambio de seguimiento. */
+  seguimiento_desde?: string | null;
+  seguimiento_hasta?: string | null;
   created_at: string;
 }
 
@@ -72,6 +95,8 @@ export interface OfertaRow {
   comentarios_author?: string | null;
   comentarios_author_role?: string | null;
   estado: OfertaEstado;
+  /** Independiente de `estado`. Por defecto pendiente. */
+  seguimiento: SeguimientoOferta;
   nda_enviado_at: string | null;
   nda_firmado_at: string | null;
   fecha_firma: string | null;
@@ -132,6 +157,92 @@ export interface ClienteInteresado {
 
 export function esOfertaEstado(value: string): value is OfertaEstado {
   return (OFERTA_ESTADOS as readonly string[]).includes(value);
+}
+
+export function esSeguimientoOferta(value: string): value is SeguimientoOferta {
+  return (SEGUIMIENTOS_OFERTA as readonly string[]).includes(value);
+}
+
+export function etiquetaSeguimiento(value: string): string {
+  if (esSeguimientoOferta(value)) return ETIQUETA_SEGUIMIENTO[value];
+  return value;
+}
+
+export function seguimientoODefecto(value: string | null | undefined): SeguimientoOferta {
+  if (value && esSeguimientoOferta(value)) return value;
+  return "pendiente";
+}
+
+/**
+ * El seguimiento no tiene transiciones: cualquiera de los cuatro valores
+ * es válido, y no mueve el estado de workflow.
+ */
+export function validarSeguimiento(
+  actual: string | null | undefined,
+  siguiente: string,
+): { ok: true; desde: SeguimientoOferta; hasta: SeguimientoOferta } | { ok: false; error: string } {
+  if (!esSeguimientoOferta(siguiente)) {
+    return { ok: false, error: "Seguimiento no válido" };
+  }
+  const desde = seguimientoODefecto(actual);
+  if (desde === siguiente) {
+    return { ok: false, error: "El seguimiento ya está en ese estado" };
+  }
+  return { ok: true, desde, hasta: siguiente };
+}
+
+export interface SeguimientoCambio {
+  ofertaId: string;
+  desde: SeguimientoOferta;
+  hasta: SeguimientoOferta;
+  author: string;
+  authorRole: string;
+  at: string;
+}
+
+/**
+ * Punto de extensión para automatizaciones al cambiar el seguimiento.
+ * Hoy no hay ninguna registrada: quien quiera reaccionar llama a
+ * `registrarAutomatizacionSeguimiento` al arrancar el proceso.
+ */
+export type AutomatizacionSeguimiento = (evento: SeguimientoCambio) => void | Promise<void>;
+
+const automatizacionesSeguimiento: AutomatizacionSeguimiento[] = [];
+
+export function registrarAutomatizacionSeguimiento(fn: AutomatizacionSeguimiento): () => void {
+  automatizacionesSeguimiento.push(fn);
+  return () => {
+    const index = automatizacionesSeguimiento.indexOf(fn);
+    if (index >= 0) automatizacionesSeguimiento.splice(index, 1);
+  };
+}
+
+export async function notificarCambioSeguimiento(evento: SeguimientoCambio): Promise<void> {
+  for (const automatizacion of [...automatizacionesSeguimiento]) {
+    await automatizacion(evento);
+  }
+}
+
+/**
+ * El agente edita el seguimiento si tiene la sección Ofertas
+ * (ver o editar). El admin siempre puede.
+ */
+export function puedeEditarSeguimiento(input: {
+  role: "admin" | "vendedor" | "cliente";
+  puedeVerOfertas: boolean;
+}): boolean {
+  switch (input.role) {
+    case "admin":
+      return true;
+    case "vendedor":
+      return input.puedeVerOfertas;
+    case "cliente":
+      return false;
+    default: {
+      const unreachable: never = input.role;
+      return unreachable;
+    }
+  }
 }
 
 export function etiquetaEstado(estado: string): string {

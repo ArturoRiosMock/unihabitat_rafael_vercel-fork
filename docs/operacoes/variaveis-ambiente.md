@@ -41,6 +41,12 @@ Sem `RESEND_API_KEY`, `sendEmail()` devolve `ok: false` com mensagem clara.
 | `CRON_SECRET` | — | Segredo das rotas `GET /api/cron/reasignar-compradores` e `GET /api/cron/cruce-demanda`. A Vercel envia `Authorization: Bearer <CRON_SECRET>`. Sem o valor, a rota responde 401. O cron de inatividade está em `vercel.json` (todos os dias às 04:15 UTC). O cruce de demanda corre segunda e quinta às 07:00 UTC (08:00 CET / 09:00 CEST). |
 | `CRUCE_DEMANDA_EMAIL_ENABLED` | `false` | `true` envia o resumo de oportunidades ao comprador (cópia ao agente). Qualquer outro valor, ou a variável ausente, só grava no CRM. |
 | `CRUCE_DEMANDA_LIMITE` | `5` | Máximo de oportunidades novas por comprador em cada envio (teto 50). |
+| `WHATSAPP_ENABLED` | `false` | `true` activa WhatsApp Cloud API y el webhook `/api/whatsapp/webhook`. Cualquier otro valor lo deja apagado. |
+| `WHATSAPP_DRY_RUN` | `true` | Vacío o `true`: solo log. `false` llama a la API de Meta. |
+| `WHATSAPP_PHONE_NUMBER_ID` | — | Id del número de WhatsApp Business. |
+| `WHATSAPP_ACCESS_TOKEN` | — | Token de la Cloud API. Secreto. |
+| `WHATSAPP_TEMPLATE_OPORTUNIDADES` | — | Plantilla con cuerpo `{{1}}` nombre y `{{2}}` resumen. |
+| `WHATSAPP_VERIFY_TOKEN` | — | Token que Meta envía en el GET de verificación del webhook. |
 
 ## URLs públicas
 

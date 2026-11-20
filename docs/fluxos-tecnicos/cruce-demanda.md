@@ -10,7 +10,7 @@
 
 ## Demanda
 
-Uma fila por comprador:
+Varias filas por comprador en `comprador_demanda` (`estado` activa o archivada, `created_at`, `autor`). La fila que ya existía se conserva como activa. El cruce usa todas las activas y se queda con el mejor nivel de cada activo.
 
 - `categorias` — tipologia do imóvel (`assets.tip` e afins) e/ou categoria da carga (`propiedades.categoria`). «Vivienda» equivale a piso, casa, chalet. «NPL», «CDR» e valores livres do Excel comparam-se normalizados.
 - `provincias` e `poblaciones` — listas. A comparação ignora maiúsculas, tildes e espaços repetidos.
@@ -40,6 +40,8 @@ O comprador edita a demanda e marca `interesado` ou `descartada` em `/portal/pri
 ## Email
 
 `CRUCE_DEMANDA_EMAIL_ENABLED` vem desligado. Com o flag ativo, o resumo vai ao comprador (cópia ao email do agente atribuído) via Resend. `EMAIL_DRY_RUN=true` regista o envio na consola e não chama a API. O corpo só leva tipologia, lugar, preço e o link da ficha pública. Não inclui referência catastral, dívida nem documentação.
+
+WhatsApp usa `src/lib/whatsapp.ts` (Cloud API). Só sai com `WHATSAPP_ENABLED=true`, telefone e `compradores.acepta_whatsapp`. `WHATSAPP_DRY_RUN` (por defeito) só escreve log. Email e WhatsApp do mesmo lote contam como um aviso. Há no máximo 2 avisos por comprador e semana UTC (`comprador_avisos`). Os ativos notificados ficam em `comprador_envios`. O cron exclui os enviados nos últimos 14 dias. O registo manual pede confirmação com «Ya enviado el dd/mm».
 
 ## Permissões
 

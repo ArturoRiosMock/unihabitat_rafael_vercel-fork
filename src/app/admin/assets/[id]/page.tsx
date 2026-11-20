@@ -2,7 +2,7 @@
 
 import { use, useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useApp } from "@/lib/context";
-import { isAdmin } from "@/lib/auth-helpers";
+import { isAdmin, canViewSection } from "@/lib/auth-helpers";
 import Link from "next/link";
 import type { Asset } from "@/lib/types";
 import { publicationListLabel } from "@/lib/asset-publication";
@@ -50,11 +50,15 @@ const tabs = [
 
 export default function AssetDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { getAsset, togglePub, session } = useApp();
+  const { getAsset, togglePub, session, permissions } = useApp();
   const userIsAdmin = isAdmin(session);
+  const puedeClientes = userIsAdmin || canViewSection(session, "ofertas", permissions ?? []);
   const visibleTabs = useMemo(
-    () => tabs.filter((t) => userIsAdmin || !t.adminOnly),
-    [userIsAdmin],
+    () => tabs.filter((t) => {
+      if (t.contentIndex === 3) return puedeClientes;
+      return userIsAdmin || !t.adminOnly;
+    }),
+    [userIsAdmin, puedeClientes],
   );
   const ctxAsset = getAsset(id);
   const [remoteAsset, setRemoteAsset] = useState<Asset | null | undefined>(undefined);
@@ -102,8 +106,8 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
   }, [session]);
 
   useEffect(() => {
-    if (!userIsAdmin && tab > 1) setTab(0);
-  }, [userIsAdmin, tab]);
+    if (!visibleTabs.some((item) => item.contentIndex === tab)) setTab(0);
+  }, [visibleTabs, tab]);
 
   const asset = remoteAsset ?? ctxAsset ?? null;
 
@@ -211,7 +215,7 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
           {tab === 0 && <TabCaracteristicas asset={asset} assetId={id} currentUser={currentUser} reloadAsset={loadRemote} canDeleteNotes={userIsAdmin} canWriteInfo={userIsAdmin} />}
           {tab === 1 && <TabDocumentacion assetId={id} currentUser={currentUser} isAdmin={userIsAdmin} />}
           {tab === 2 && userIsAdmin && <TabAgentes asset={asset} assetId={id} currentUser={currentUser} canDeleteNotes={userIsAdmin} />}
-          {tab === 3 && userIsAdmin && <TabClientes assetId={id} />}
+          {tab === 3 && puedeClientes && <TabClientes assetId={id} />}
           {tab === 4 && userIsAdmin && <TabAdmin asset={asset} assetId={id} togglePub={() => void handleTogglePub()} currentUser={currentUser} reloadAsset={loadRemote} canDeleteNotes={userIsAdmin} />}
         </div>
       </div>

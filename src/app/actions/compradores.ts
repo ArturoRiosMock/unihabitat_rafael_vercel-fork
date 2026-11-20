@@ -350,6 +350,37 @@ export async function setCompradorAcceso(id: string, acceso: CompradorAcceso): P
   return updateCompradorFields(id, { acceso });
 }
 
+export async function setAceptaWhatsapp(
+  compradorId: string,
+  acepta: boolean,
+): Promise<ActionResult<{ aceptaWhatsapp: boolean }>> {
+  try {
+    const session = await getServerSession();
+    if (!session) return { ok: false, error: "Acceso denegado" };
+    const sb = await createServiceClient();
+    let id = compradorId.trim();
+    if (session.role === "cliente") {
+      const { data, error } = await sb
+        .from("compradores")
+        .select("id")
+        .ilike("email", session.email.trim())
+        .limit(1)
+        .maybeSingle();
+      if (error) return { ok: false, error: error.message };
+      if (!data?.id) return { ok: false, error: "Comprador no encontrado" };
+      id = data.id as string;
+    } else if (session.role !== "admin") {
+      return { ok: false, error: "Solo el gestor puede cambiar el consentimiento" };
+    }
+    if (!id) return { ok: false, error: "Comprador no encontrado" };
+    const { error } = await sb.from("compradores").update({ acepta_whatsapp: acepta }).eq("id", id);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, aceptaWhatsapp: acepta };
+  } catch (err) {
+    return actionError(err, "No se pudo guardar el consentimiento de WhatsApp");
+  }
+}
+
 /** Comprador de la sesión actual: cookie dev-auth o usuario Supabase. */
 export async function fetchCompradorDeSesion(): Promise<Comprador | null> {
   const session = await getServerSession();

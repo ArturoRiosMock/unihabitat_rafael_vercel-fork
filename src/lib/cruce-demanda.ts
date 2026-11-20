@@ -72,13 +72,22 @@ export const ETIQUETA_ESTADO_OPORTUNIDAD: Record<EstadoOportunidad, string> = {
   descartada: "Descartada",
 };
 
+export const ESTADOS_DEMANDA = ["activa", "archivada"] as const;
+export type EstadoDemanda = (typeof ESTADOS_DEMANDA)[number];
+
 export interface DemandaComprador {
+  /** Vacío en el algoritmo; la fila guardada lo trae. */
+  id?: string;
   compradorId: string;
   categorias: string[];
   provincias: string[];
   poblaciones: string[];
   precioMin: number | null;
   precioMax: number | null;
+  estado?: EstadoDemanda;
+  createdAt?: string;
+  autor?: string | null;
+  autorRol?: string | null;
 }
 
 export interface DemandaInput {
@@ -148,6 +157,7 @@ export interface FichaPublicaOportunidad {
 }
 
 export interface EnvioResumen {
+  compradorId: string;
   to: string;
   cc?: string;
   nombre: string;
@@ -171,7 +181,17 @@ export interface OpcionesCruce {
   registrar: boolean;
   emailEnabled: boolean;
   origenPublico?: string;
-  enviarEmail?: (envio: EnvioResumen) => Promise<"enviado" | "error">;
+  /**
+   * Activos ya enviados a ese comprador. El cruce automático los mete aquí
+   * para no repetirlos. El alta manual pide confirmación en la action.
+   */
+  excluir?: Array<{ compradorId: string; assetId: string }>;
+  /**
+   * Compradores que ya tienen 2 avisos esta semana. No se registran en
+   * esta pasada: el siguiente lote aún puede ofrecerles el activo.
+   */
+  compradoresSinCupo?: ReadonlySet<string>;
+  enviarEmail?: (envio: EnvioResumen) => Promise<"enviado" | "error" | "omitido">;
 }
 
 export interface ResultadoCruceComprador {
@@ -180,6 +200,7 @@ export interface ResultadoCruceComprador {
   assetIds: string[];
   fichas: FichaPublicaOportunidad[];
   email: "enviado" | "omitido" | "error" | "desactivado";
+  omitidoPorCupo?: boolean;
 }
 
 export interface ResultadoCruce extends EjecucionCruce {
@@ -428,6 +449,53 @@ export function cruzarDemanda(input: {
   return { nivel: hits.length > 0 ? nivel : null, hits };
 }
 
+const ORDEN_NIVEL_CRUCE: Record<NivelCruce, number> = {
+  poblacion: 0,
+  provincia: 1,
+  solo_categoria: 2,
+  sin_categoria: 3,
+};
+
+/**
+ * Cruza todas las demandas activas de un comprador y se queda con el
+ * mejor nivel de cada activo, hasta el límite del envío.
+ */
+export function cruzarDemandas(input: {
+  demandas: DemandaComprador[];
+  activos: ActivoCruce[];
+  yaOfrecidos: Iterable<string>;
+  limite?: number;
+}): { nivel: NivelCruce | null; hits: CruceHit[] } {
+  const activas = input.demandas.filter((demanda) => demanda.estado !== "archivada");
+  const ya = new Set(input.yaOfrecidos);
+  const porAsset = new Map<string, CruceHit>();
+  for (const demanda of activas) {
+    const cruce = cruzarDemanda({
+      demanda,
+      activos: input.activos,
+      yaOfrecidos: ya,
+      limite: LIMITE_OPORTUNIDADES_MAX,
+    });
+    for (const hit of cruce.hits) {
+      const previo = porAsset.get(hit.assetId);
+      if (!previo || ORDEN_NIVEL_CRUCE[hit.nivel] < ORDEN_NIVEL_CRUCE[previo.nivel]) {
+        porAsset.set(hit.assetId, hit);
+      }
+    }
+  }
+  const ordenados = [...porAsset.values()].sort((a, b) => {
+    const nivel = ORDEN_NIVEL_CRUCE[a.nivel] - ORDEN_NIVEL_CRUCE[b.nivel];
+    if (nivel !== 0) return nivel;
+    return a.assetId.localeCompare(b.assetId, "es");
+  });
+  const hits = ordenados.slice(0, limiteEfectivo(input.limite));
+  const nivel = hits.reduce<NivelCruce | null>((mejor, hit) => {
+    if (!mejor || ORDEN_NIVEL_CRUCE[hit.nivel] < ORDEN_NIVEL_CRUCE[mejor]) return hit.nivel;
+    return mejor;
+  }, null);
+  return { nivel, hits };
+}
+
 /**
  * Mejor nivel al que este activo encaja con la demanda.
  * La ficha del activo lo usa para listar compradores. El envío semanal
@@ -565,11 +633,17 @@ export async function ejecutarCruce(
     store.listDemandas(),
     store.listActivosPublicados(),
   ]);
-  const demandaPorId = new Map(demandas.map((demanda) => [demanda.compradorId, demanda]));
   const activoPorId = new Map(activos.map((activo) => [activo.id, activo]));
   const compradorPorId = new Map(compradores.map((comprador) => [comprador.id, comprador]));
+  const grupos = new Map<string, DemandaComprador[]>();
+  for (const demanda of demandas) {
+    if (demanda.estado === "archivada") continue;
+    const lista = grupos.get(demanda.compradorId) ?? [];
+    lista.push(demanda);
+    grupos.set(demanda.compradorId, lista);
+  }
 
-  let objetivos = demandas.map((demanda) => demanda.compradorId);
+  let objetivos = [...grupos.keys()];
   if (opciones.soloCompradorId) {
     objetivos = objetivos.filter((id) => id === opciones.soloCompradorId);
   }
@@ -590,12 +664,25 @@ export async function ejecutarCruce(
   const quiereEmail = opciones.registrar && opciones.emailEnabled && Boolean(opciones.enviarEmail);
 
   for (const compradorId of objetivos) {
-    const demanda = demandaPorId.get(compradorId);
-    if (!demanda) continue;
-    const cruce = cruzarDemanda({
-      demanda,
+    if (opciones.compradoresSinCupo?.has(compradorId)) {
+      detalles.push({
+        compradorId,
+        nivel: null,
+        assetIds: [],
+        fichas: [],
+        email: "omitido",
+        omitidoPorCupo: true,
+      });
+      continue;
+    }
+    const ya = new Set(yaPorComprador.get(compradorId) ?? []);
+    for (const excluido of opciones.excluir ?? []) {
+      if (excluido.compradorId === compradorId) ya.add(excluido.assetId);
+    }
+    const cruce = cruzarDemandas({
+      demandas: grupos.get(compradorId) ?? [],
       activos,
-      yaOfrecidos: yaPorComprador.get(compradorId) ?? [],
+      yaOfrecidos: ya,
       limite,
     });
     for (const hit of cruce.hits) {
@@ -614,6 +701,7 @@ export async function ejecutarCruce(
     });
     if (plan.enviar) {
       envios.set(compradorId, {
+        compradorId,
         to: plan.to,
         cc: plan.cc,
         nombre: comprador?.nombre?.trim() || "cliente",
@@ -643,7 +731,10 @@ export async function ejecutarCruce(
         continue;
       }
       try {
-        detalle.email = (await enviar(envio)) === "enviado" ? "enviado" : "error";
+        const estado = await enviar(envio);
+        detalle.email = estado === "enviado" || estado === "omitido" || estado === "error"
+          ? estado
+          : "error";
       } catch {
         detalle.email = "error";
       }

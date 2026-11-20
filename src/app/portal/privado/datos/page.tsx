@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Loader2, Save } from "lucide-react";
 import { raiseActionError } from "@/lib/action-result";
-import { ensureCompradorForEmail, fetchCompradorByEmail, updateMisDatosComprador } from "@/app/actions/compradores";
+import { ensureCompradorForEmail, fetchCompradorByEmail, setAceptaWhatsapp, updateMisDatosComprador } from "@/app/actions/compradores";
 import { createClient } from "@/lib/supabase/client";
 import { DatosFirmaFields, DatosOfertaEstado } from "@/components/DatosFirmaFields";
 import { datosFirmaFromComprador, datosFirmaVacios, splitNombreCompleto, type DatosFirma } from "@/lib/comprador-oferta";
@@ -28,6 +28,7 @@ function readDevAuth(): { email: string; role: string; nombre: string } | null {
 
 export default function MisDatosPage() {
   const [datos, setDatos] = useState<DatosFirma>(datosFirmaVacios());
+  const [aceptaWhatsapp, setAcepta] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -79,6 +80,7 @@ export default function MisDatosPage() {
           setError("No encontramos tu ficha de comprador.");
         } else {
           setDatos(datosFirmaFromComprador(row));
+          setAcepta(row.aceptaWhatsapp === true);
         }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "No se pudo cargar la ficha");
@@ -96,6 +98,8 @@ export default function MisDatosPage() {
     try {
       const result = await updateMisDatosComprador(datos);
       raiseActionError(result);
+      const whatsapp = await setAceptaWhatsapp("", aceptaWhatsapp);
+      raiseActionError(whatsapp);
       toast.success("Datos guardados");
     } catch (err) {
       toast.error("No se pudieron guardar", {
@@ -148,6 +152,15 @@ export default function MisDatosPage() {
             emailReadOnly
             idPrefix="mis-datos"
           />
+          <label className="mt-4 flex items-start gap-2 text-sm text-navy">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={aceptaWhatsapp}
+              onChange={(event) => setAcepta(event.target.checked)}
+            />
+            <span>Acepto recibir por WhatsApp avisos de oportunidades que encajen con mi demanda.</span>
+          </label>
           <div className="mt-4 flex justify-end">
             <button
               type="button"

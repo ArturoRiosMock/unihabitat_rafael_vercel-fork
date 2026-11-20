@@ -4,7 +4,9 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { lunesSemanaUtc, planAvisoComprador } from "@/lib/aviso-comprador";
 import { getPublicAppOrigin } from "@/lib/app-public-url";
+import { DIAS_SIN_REPETIR_ENVIO, type CanalEnvio } from "@/lib/comprador-envios";
 import {
   cruceDemandaEmailEnabled,
   ejecutarCruce,
@@ -19,6 +21,7 @@ import {
   type CruceStore,
   type DemandaComprador,
   type EjecucionCruce,
+  type EstadoDemanda,
   type EstadoOportunidad,
   type NivelCruce,
   type EncajeComprador,
@@ -28,6 +31,7 @@ import {
 } from "@/lib/cruce-demanda";
 import { oportunidadesDemandaTemplate } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/send";
+import { enviarWhatsappOportunidades, telefonoWhatsapp, whatsappHabilitado } from "@/lib/whatsapp";
 
 const PAGE = 1000;
 const MAX_PAGES = 100;
@@ -80,14 +84,23 @@ function esCanal(value: string): value is CanalOportunidad {
   return value === "cron" || value === "manual";
 }
 
+function estadoDemanda(value: unknown): EstadoDemanda {
+  return texto(value) === "archivada" ? "archivada" : "activa";
+}
+
 function rowDemanda(row: Record<string, unknown>): DemandaComprador {
   return {
+    id: texto(row.id) || undefined,
     compradorId: texto(row.comprador_id),
     categorias: textos(row.categorias),
     provincias: textos(row.provincias),
     poblaciones: textos(row.poblaciones),
     precioMin: numero(row.precio_min),
     precioMax: numero(row.precio_max),
+    estado: estadoDemanda(row.estado),
+    createdAt: texto(row.created_at) || undefined,
+    autor: texto(row.autor) || null,
+    autorRol: texto(row.autor_rol) || null,
   };
 }
 
@@ -135,7 +148,9 @@ export function supabaseCruceStore(sb: SupabaseClient): CruceStore {
     },
 
     async listDemandas(): Promise<DemandaComprador[]> {
-      const rows = await fetchPages((from, to) => sb.from("comprador_demanda").select("*").order("comprador_id").range(from, to));
+      const rows = await fetchPages((from, to) => (
+        sb.from("comprador_demanda").select("*").eq("estado", "activa").order("comprador_id").range(from, to)
+      ));
       return rows.map(rowDemanda);
     },
 
@@ -237,6 +252,13 @@ export interface RunCruceInput {
   soloCompradorId?: string;
   emailEnabled?: boolean;
   limite?: number;
+  /** Nombre visible de quien lanza el cruce. El cron usa «Gestor». */
+  enviadoPor?: string;
+  /**
+   * El cruce manual confirma el reenvío en la action y no debe excluir
+   * los activos de los últimos 14 días. El cron sí los excluye.
+   */
+  excluirRecientes?: boolean;
 }
 
 export async function runCruceDemanda(
@@ -244,13 +266,23 @@ export async function runCruceDemanda(
   input: RunCruceInput,
 ): Promise<ResultadoCruce> {
   const emailEnabled = input.emailEnabled ?? cruceDemandaEmailEnabled(process.env.CRUCE_DEMANDA_EMAIL_ENABLED);
-  return ejecutarCruce(supabaseCruceStore(sb), {
+  const whatsappOn = whatsappHabilitado(process.env);
+  const semana = lunesSemanaUtc(new Date());
+  const sinCupo = input.registrar && (emailEnabled || whatsappOn)
+    ? await compradoresSinCupo(sb, semana)
+    : new Set<string>();
+  const excluirRecientes = input.excluirRecientes ?? input.origen === "cron";
+  const excluir = excluirRecientes ? await listarEnviosRecientes(sb) : [];
+
+  const resultado = await ejecutarCruce(supabaseCruceStore(sb), {
     origen: input.origen,
     registrar: input.registrar,
     soloCompradorId: input.soloCompradorId,
     limite: input.limite ?? limiteDesdeEnv(process.env.CRUCE_DEMANDA_LIMITE),
     emailEnabled,
     origenPublico: getPublicAppOrigin(),
+    excluir,
+    compradoresSinCupo: sinCupo,
     enviarEmail: async (envio) => {
       const template = oportunidadesDemandaTemplate({
         nombre: envio.nombre,
@@ -270,31 +302,212 @@ export async function runCruceDemanda(
       return "enviado";
     },
   });
+
+  if (input.registrar) {
+    await registrarAvisosDelCruce(sb, resultado, {
+      whatsappOn,
+      semana,
+      enviadoPor: input.enviadoPor?.trim() || "Gestor",
+    });
+  }
+  return resultado;
 }
 
-export async function fetchDemandaRow(
+async function compradoresSinCupo(sb: SupabaseClient, semana: string): Promise<Set<string>> {
+  const rows = await fetchPages((from, to) => (
+    sb.from("comprador_avisos").select("comprador_id").eq("semana", semana).order("comprador_id").range(from, to)
+  ));
+  const cuentas = new Map<string, number>();
+  for (const row of rows) {
+    const id = texto(row.comprador_id);
+    if (!id) continue;
+    cuentas.set(id, (cuentas.get(id) ?? 0) + 1);
+  }
+  return new Set([...cuentas.entries()].filter(([, total]) => total >= 2).map(([id]) => id));
+}
+
+async function listarEnviosRecientes(
+  sb: SupabaseClient,
+): Promise<Array<{ compradorId: string; assetId: string }>> {
+  const desde = new Date(Date.now() - DIAS_SIN_REPETIR_ENVIO * 24 * 60 * 60 * 1000).toISOString();
+  const rows = await fetchPages((from, to) => (
+    sb.from("comprador_envios")
+      .select("comprador_id, asset_id, enviado_at")
+      .gte("enviado_at", desde)
+      .order("enviado_at", { ascending: false })
+      .range(from, to)
+  ));
+  return rows.map((row) => ({
+    compradorId: texto(row.comprador_id),
+    assetId: texto(row.asset_id),
+  }));
+}
+
+async function registrarAvisosDelCruce(
+  sb: SupabaseClient,
+  resultado: ResultadoCruce,
+  input: { whatsappOn: boolean; semana: string; enviadoPor: string },
+): Promise<void> {
+  const conActivos = resultado.detalles.filter((detalle) => detalle.assetIds.length > 0);
+  if (conActivos.length === 0) return;
+  const ids = conActivos.map((detalle) => detalle.compradorId);
+  const { data, error } = await sb
+    .from("compradores")
+    .select("id, nombre, apellidos, tel, acepta_whatsapp, email")
+    .in("id", ids);
+  if (error) throw new Error(error.message);
+  const ficha = new Map((data ?? []).map((row) => [texto((row as { id?: unknown }).id), row as Record<string, unknown>]));
+
+  for (const detalle of conActivos) {
+    const comprador = ficha.get(detalle.compradorId);
+    const telefono = telefonoWhatsapp(texto(comprador?.tel));
+    const acepta = comprador?.acepta_whatsapp === true;
+    const plan = planAvisoComprador({
+      avisosEnSemana: 0,
+      emailEnabled: false,
+      whatsappEnabled: input.whatsappOn,
+      aceptaWhatsapp: acepta,
+      tieneTelefono: Boolean(telefono),
+      tieneEmail: texto(comprador?.email).includes("@"),
+    });
+    let whatsapp: "enviado" | "omitido" | "error" = "omitido";
+    if (plan.whatsapp && telefono) {
+      whatsapp = await enviarWhatsappOportunidades({
+        telefono,
+        nombre: [texto(comprador?.nombre), texto(comprador?.apellidos)].filter(Boolean).join(" ").trim() || "cliente",
+        oportunidades: detalle.fichas.map((fichaPublica) => ({
+          titulo: fichaPublica.titulo,
+          lugar: fichaPublica.lugar,
+          precioLabel: fichaPublica.precioLabel,
+        })),
+      });
+    }
+    const canales: CanalEnvio[] = [];
+    if (detalle.email === "enviado") canales.push("email");
+    if (whatsapp === "enviado") canales.push("whatsapp");
+    if (canales.length === 0) canales.push("cruce");
+    await insertarEnvios(sb, detalle.compradorId, detalle.assetIds, canales, input.enviadoPor);
+    if (detalle.email === "enviado" || whatsapp === "enviado") {
+      const { error: avisoError } = await sb.from("comprador_avisos").insert({
+        comprador_id: detalle.compradorId,
+        semana: input.semana,
+        canales,
+      });
+      if (avisoError) {
+        console.error("[cruce-demanda] aviso:", avisoError.message);
+      }
+    }
+  }
+}
+
+export async function insertarEnvios(
   sb: SupabaseClient,
   compradorId: string,
-): Promise<DemandaComprador | null> {
+  assetIds: string[],
+  canales: CanalEnvio[],
+  enviadoPor: string,
+  nota?: string | null,
+): Promise<void> {
+  const ahora = new Date().toISOString();
+  const filas = canales.flatMap((canal) => assetIds.map((assetId) => ({
+    comprador_id: compradorId,
+    asset_id: assetId,
+    canal,
+    enviado_por: enviadoPor,
+    enviado_at: ahora,
+    nota: nota?.trim() || null,
+  })));
+  for (let i = 0; i < filas.length; i += 500) {
+    const { error } = await sb.from("comprador_envios").insert(filas.slice(i, i + 500));
+    if (error) throw new Error(error.message);
+  }
+}
+
+export async function listDemandasComprador(
+  sb: SupabaseClient,
+  compradorId: string,
+): Promise<DemandaComprador[]> {
   const { data, error } = await sb
     .from("comprador_demanda")
     .select("*")
     .eq("comprador_id", compradorId)
-    .maybeSingle();
+    .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return data ? rowDemanda(data as Record<string, unknown>) : null;
+  return ((data ?? []) as Record<string, unknown>[]).map(rowDemanda);
 }
 
-export async function saveDemandaRow(sb: SupabaseClient, demanda: DemandaComprador): Promise<void> {
-  const { error } = await sb.from("comprador_demanda").upsert({
-    comprador_id: demanda.compradorId,
-    categorias: demanda.categorias,
-    provincias: demanda.provincias,
-    poblaciones: demanda.poblaciones,
-    precio_min: demanda.precioMin,
-    precio_max: demanda.precioMax,
-  }, { onConflict: "comprador_id" });
+export async function insertDemanda(
+  sb: SupabaseClient,
+  demanda: DemandaComprador,
+  autor: { nombre: string; rol: string },
+): Promise<DemandaComprador> {
+  const { data, error } = await sb
+    .from("comprador_demanda")
+    .insert({
+      comprador_id: demanda.compradorId,
+      categorias: demanda.categorias,
+      provincias: demanda.provincias,
+      poblaciones: demanda.poblaciones,
+      precio_min: demanda.precioMin,
+      precio_max: demanda.precioMax,
+      estado: "activa",
+      autor: autor.nombre,
+      autor_rol: autor.rol,
+    })
+    .select("*")
+    .single();
   if (error) throw new Error(error.message);
+  return rowDemanda(data as Record<string, unknown>);
+}
+
+export async function setEstadoDemanda(
+  sb: SupabaseClient,
+  demandaId: string,
+  estado: EstadoDemanda,
+): Promise<DemandaComprador> {
+  const { data, error } = await sb
+    .from("comprador_demanda")
+    .update({ estado })
+    .eq("id", demandaId)
+    .select("*")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Demanda no encontrada");
+  return rowDemanda(data as Record<string, unknown>);
+}
+
+export async function deleteDemanda(sb: SupabaseClient, demandaId: string): Promise<void> {
+  const { error } = await sb.from("comprador_demanda").delete().eq("id", demandaId);
+  if (error) throw new Error(error.message);
+}
+
+export async function listEnviosComprador(
+  sb: SupabaseClient,
+  compradorId: string,
+): Promise<Array<{
+  id: string;
+  compradorId: string;
+  assetId: string;
+  canal: string;
+  enviadoPor: string;
+  enviadoAt: string;
+  nota: string;
+}>> {
+  const { data, error } = await sb
+    .from("comprador_envios")
+    .select("id, comprador_id, asset_id, canal, enviado_por, enviado_at, nota")
+    .eq("comprador_id", compradorId)
+    .order("enviado_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as Record<string, unknown>[]).map((row) => ({
+    id: texto(row.id),
+    compradorId: texto(row.comprador_id),
+    assetId: texto(row.asset_id),
+    canal: texto(row.canal),
+    enviadoPor: texto(row.enviado_por),
+    enviadoAt: texto(row.enviado_at),
+    nota: texto(row.nota),
+  }));
 }
 
 export async function listOportunidadesVista(
@@ -397,7 +610,7 @@ export async function listarEncajeActivo(
   activo: ActivoCruce,
 ): Promise<EncajeComprador[]> {
   const [demandas, compradores] = await Promise.all([
-    fetchPages((from, to) => sb.from("comprador_demanda").select("*").order("comprador_id").range(from, to)),
+    fetchPages((from, to) => sb.from("comprador_demanda").select("*").eq("estado", "activa").order("comprador_id").range(from, to)),
     fetchPages((from, to) => sb.from("compradores").select("id, nombre, apellidos, agente").order("id").range(from, to)),
   ]);
   const ficha = new Map(compradores.map((row) => {
@@ -405,19 +618,42 @@ export async function listarEncajeActivo(
     return [texto(row.id), { nombre: nombre || texto(row.id), agente: texto(row.agente) || "Gestor" }] as const;
   }));
   const encajes: EncajeComprador[] = [];
+  const mejorPorComprador = new Map<string, EncajeComprador>();
   for (const row of demandas) {
     const demanda = rowDemanda(row);
     const nivel = nivelEncajeActivo(demanda, activo);
     if (!nivel) continue;
     const datos = ficha.get(demanda.compradorId);
-    encajes.push({
+    const encaje: EncajeComprador = {
       compradorId: demanda.compradorId,
       nombre: datos?.nombre || demanda.compradorId,
       agente: datos?.agente || "Gestor",
       nivel,
-    });
+    };
+    const previo = mejorPorComprador.get(demanda.compradorId);
+    if (!previo || ordenNivel(nivel) < ordenNivel(previo.nivel)) {
+      mejorPorComprador.set(demanda.compradorId, encaje);
+    }
   }
+  encajes.push(...mejorPorComprador.values());
   return ordenarEncaje(encajes);
+}
+
+function ordenNivel(nivel: NivelCruce): number {
+  switch (nivel) {
+    case "poblacion":
+      return 0;
+    case "provincia":
+      return 1;
+    case "solo_categoria":
+      return 2;
+    case "sin_categoria":
+      return 3;
+    default: {
+      const desconocido: never = nivel;
+      return desconocido;
+    }
+  }
 }
 
 export async function fetchUltimaEjecucion(sb: SupabaseClient): Promise<EjecucionCruce | null> {

@@ -153,6 +153,8 @@ export interface Comprador {
   nda: "Firmada" | "Pendiente";
   /** Portal privado: sin_acceso hasta activación manual admin. */
   acceso: CompradorAcceso;
+  /** El comprador acepta avisos de oportunidades por WhatsApp. */
+  aceptaWhatsapp?: boolean;
   /**
    * Última gestión del agente asignado (ISO). Null si la columna aún no existe.
    * El admin no reinicia este reloj.

@@ -5,9 +5,10 @@ import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { fetchClientesInteresados } from "@/app/actions/asset-clientes";
 import { raiseActionError } from "@/lib/action-result";
-import { fetchOfertasByAsset, updateOfertaEstado } from "@/app/actions/ofertas";
+import { fetchOfertasByAsset, updateOfertaEstado, updateOfertaSeguimiento } from "@/app/actions/ofertas";
 import { fetchCompradores } from "@/app/actions/compradores";
 import { OfertaEstadoForm, OfertaHistorialLista } from "@/components/OfertaEstadoForm";
+import { OfertaSeguimientoControl } from "@/components/OfertaSeguimientoControl";
 import { formatCommentTimestamp } from "@/lib/comment-author";
 import { nombreVisible } from "@/lib/comprador-oferta";
 import {
@@ -17,6 +18,7 @@ import {
   type ClienteInteresado,
   type OfertaEstado,
   type OfertaRow,
+  type SeguimientoOferta,
 } from "@/lib/oferta-workflow";
 import type { Comprador } from "@/lib/types";
 import { toast } from "@/lib/toast";
@@ -72,6 +74,18 @@ export function AssetClientesBloques({ assetId }: { assetId: string }) {
       raiseActionError(result);
       await load();
       toast.success("Estado de oferta actualizado", { description: etiquetaEstado(cambio.estado) });
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  async function cambiarSeguimiento(ofertaId: string, seguimiento: SeguimientoOferta) {
+    setUpdatingId(ofertaId);
+    try {
+      const result = await updateOfertaSeguimiento(ofertaId, seguimiento);
+      raiseActionError(result);
+      await load();
+      toast.success("Seguimiento actualizado");
     } finally {
       setUpdatingId(null);
     }
@@ -194,6 +208,11 @@ export function AssetClientesBloques({ assetId }: { assetId: string }) {
                     importeActual={oferta.propuesta_euros}
                     disabled={updatingId === oferta.id}
                     onSubmit={(cambio) => cambiarEstado(oferta.id, cambio)}
+                  />
+                  <OfertaSeguimientoControl
+                    seguimiento={oferta.seguimiento}
+                    disabled={updatingId === oferta.id}
+                    onChange={(valor) => cambiarSeguimiento(oferta.id, valor)}
                   />
                   <OfertaHistorialLista historial={oferta.historial} />
                 </article>

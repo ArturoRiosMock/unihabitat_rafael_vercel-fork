@@ -28,6 +28,7 @@ import { getCompradorAgente, setCompradorAgente } from "@/app/actions/vendedores
 import {
   deleteComprador,
   setCompradorAcceso,
+  setAceptaWhatsapp,
   updateCompradorFields,
 } from "@/app/actions/compradores";
 import { fetchOfertasByComprador } from "@/app/actions/ofertas";
@@ -44,6 +45,7 @@ import { toast } from "@/lib/toast";
 import { datosFirmaFromComprador, nombreVisible, type DatosFirma } from "@/lib/comprador-oferta";
 import { DatosFirmaFields, DatosOfertaEstado } from "@/components/DatosFirmaFields";
 import { DemandaBloque } from "@/components/DemandaBloque";
+import { ActivosEnviadosBloque } from "@/components/ActivosEnviadosBloque";
 
 const tabs = [
   { icon: User, label: "Datos" },
@@ -143,6 +145,45 @@ function SectionCard({ title, children }: { title: string; children: React.React
       <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[1.5px] text-gold after:h-px after:flex-1 after:bg-border">{title}</div>
       {children}
     </div>
+  );
+}
+
+function ConsentimientoWhatsapp({ compradorId, acepta }: { compradorId: string; acepta: boolean }) {
+  const { refreshCompradores } = useApp();
+  const [valor, setValor] = useState(acepta);
+  const [guardando, setGuardando] = useState(false);
+
+  async function cambiar(next: boolean) {
+    setValor(next);
+    setGuardando(true);
+    try {
+      const result = await setAceptaWhatsapp(compradorId, next);
+      raiseActionError(result);
+      await refreshCompradores();
+      toast.success(next ? "WhatsApp activado" : "WhatsApp desactivado");
+    } catch (err) {
+      setValor(!next);
+      toast.error("No se pudo guardar", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <section className="mb-4 rounded-lg border border-border bg-white p-5 shadow-sm">
+      <h2 className="mb-2 text-[10px] font-semibold uppercase tracking-[1.5px] text-gold">WhatsApp</h2>
+      <label className="flex items-center gap-2 text-sm text-navy">
+        <input
+          type="checkbox"
+          checked={valor}
+          disabled={guardando}
+          onChange={(event) => void cambiar(event.target.checked)}
+        />
+        Acepta avisos de oportunidades por WhatsApp
+      </label>
+    </section>
   );
 }
 
@@ -336,6 +377,12 @@ function TabDatos({ c, isAgente }: { c: Comprador; isAgente: boolean }) {
       </div>
 
       <DemandaBloque compradorId={c.id} modo="staff" />
+
+      <ActivosEnviadosBloque compradorId={c.id} />
+
+      {isAgente ? null : (
+        <ConsentimientoWhatsapp compradorId={c.id} acepta={c.aceptaWhatsapp === true} />
+      )}
 
       {isAgente ? null : (
         <div className="mb-4">

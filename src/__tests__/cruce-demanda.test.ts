@@ -5,6 +5,7 @@ import {
   LIMITE_OPORTUNIDADES_DEFECTO,
   categoriasCoinciden,
   cruzarDemanda,
+  cruzarDemandas,
   cruceDemandaEmailEnabled,
   ejecutarCruce,
   nivelEncajeActivo,
@@ -337,5 +338,63 @@ describe("migración de demanda", () => {
     expect(sql).toContain("estado in ('interesado', 'descartada')");
     expect(sql).toContain("grant update (estado)");
     expect(sql).toContain("enable row level security");
+  });
+});
+
+describe("varias demandas y exclusiones del cruce", () => {
+  it("usa todas las demandas activas y descarta la archivada", () => {
+    const cruce = cruzarDemandas({
+      demandas: [
+        demanda({ estado: "archivada", poblaciones: ["Getafe"] }),
+        demanda({ poblaciones: ["Alcobendas"], provincias: ["Madrid"] }),
+      ],
+      activos: [
+        activo({ id: "getafe", poblacion: "Getafe" }),
+        activo({ id: "alco", poblacion: "Alcobendas" }),
+      ],
+      yaOfrecidos: [],
+    });
+    expect(cruce.hits.map((hit) => hit.assetId)).toEqual(["alco"]);
+    expect(cruce.nivel).toBe("poblacion");
+  });
+
+  it("el cruce automático no ofrece un activo excluido y respeta el cupo", async () => {
+    const inserts: OportunidadInsert[][] = [];
+    const store: CruceStore = {
+      async listCompradores() {
+        return [{ id: "c1", email: "ana@cliente.test", nombre: "Ana", agenteEmail: null }];
+      },
+      async listDemandas() {
+        return [demanda()];
+      },
+      async listActivosPublicados() {
+        return [activo({ id: "getafe-piso" })];
+      },
+      async listOfrecidos() {
+        return [];
+      },
+      async insertOportunidades(rows) {
+        inserts.push(rows);
+      },
+      async insertEjecucion() {
+        return undefined;
+      },
+    };
+    const excluido = await ejecutarCruce(store, {
+      origen: "cron",
+      registrar: true,
+      emailEnabled: false,
+      excluir: [{ compradorId: "c1", assetId: "getafe-piso" }],
+    });
+    expect(excluido.oportunidades).toBe(0);
+    const sinCupo = await ejecutarCruce(store, {
+      origen: "cron",
+      registrar: true,
+      emailEnabled: true,
+      compradoresSinCupo: new Set(["c1"]),
+    });
+    expect(sinCupo.oportunidades).toBe(0);
+    expect(sinCupo.detalles[0]?.omitidoPorCupo).toBe(true);
+    expect(inserts).toHaveLength(0);
   });
 });

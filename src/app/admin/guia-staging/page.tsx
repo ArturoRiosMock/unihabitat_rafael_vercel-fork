@@ -32,6 +32,98 @@ type Step = {
   icon?: typeof Building2;
 };
 
+const NOVIEMBRE_2026_STEPS: Step[] = [
+  {
+    id: "nov20-alta-manual",
+    fase: "20 nov 2026",
+    title: "Alta manual de un activo",
+    where: "Admin → Activos → Nuevo activo",
+    href: "/admin",
+    icon: Building2,
+    what: [
+      "Formulario de alta: referencia catastral (con consulta al catastro), tipo, dirección, municipio, provincia, CP, superficie, precio, descripción, situación, deuda y proceso.",
+      "Propietario y contacto solo los rellena el gestor. Por defecto el activo queda en borrador; Activar lo publica.",
+      "Fotos y documentos van al mismo bucket documentos que la ficha. Si la referencia ya existe, no se crea.",
+    ],
+    howToTest: [
+      "Entra como admin → Activos → Nuevo activo.",
+      "Rellena referencia, tipo, dirección, municipio y provincia → Crear activo → se abre la ficha en borrador.",
+      "Como agente no aparece el botón.",
+    ],
+  },
+  {
+    id: "nov20-envios",
+    fase: "20 nov 2026",
+    title: "Activos enviados al comprador",
+    where: "Admin → Compradores → ficha",
+    href: "/admin/compradores",
+    icon: ShoppingCart,
+    what: [
+      "Tabla comprador_envios: activo, fecha, canal (email, WhatsApp, manual o cruce) y quién lo envió.",
+      "Si ese activo se envió en los últimos 14 días, sale «Ya enviado el dd/mm» y hay que confirmar.",
+      "El cruce automático excluye esos activos. El cron y el alta manual dejan constancia aquí.",
+    ],
+    howToTest: [
+      "Abre el comprador TEST-COMP-001 (asignado a agente1) → Activos enviados.",
+      "Registra un envío manual del activo TEST-DOC-001 y vuelve a registrarlo: debe pedir confirmación.",
+    ],
+  },
+  {
+    id: "nov20-demandas",
+    fase: "20 nov 2026",
+    title: "Varias demandas por comprador",
+    where: "Ficha del comprador y /portal/privado/demanda",
+    href: "/portal/privado/demanda",
+    icon: FileText,
+    what: [
+      "Cada guardado crea una demanda con filtros, fecha, autor y estado activa o archivada.",
+      "La demanda que ya existía se conserva como activa. El cruce usa todas las activas.",
+      "Tras guardar se ve el mensaje «Demanda guardada» y la fila entra en Demandas guardadas.",
+    ],
+    howToTest: [
+      "Como comprador1, en Mi demanda, guarda una búsqueda y comprueba que aparece en la lista.",
+      "Archívala y confirma que el cruce deja de usarla. Borrar la quita de la lista.",
+    ],
+  },
+  {
+    id: "nov20-seguimiento",
+    fase: "20 nov 2026",
+    title: "Seguimiento de la oferta",
+    where: "Admin → Ofertas y pestaña Clientes del activo",
+    href: "/admin/ofertas",
+    icon: FileText,
+    what: [
+      "Campo seguimiento, aparte del estado de workflow: Pendiente, En seguimiento, Enviado, Sin respuesta.",
+      "El cambio queda en oferta_historial con autor y fecha, y se puede filtrar en Ofertas.",
+      "notificarCambioSeguimiento en src/lib/oferta-workflow.ts es el punto para automatizaciones. Aún no hay ninguna.",
+    ],
+    howToTest: [
+      "Como admin, en Ofertas, cambia el seguimiento y filtra por él.",
+      "Como agente1, solo si tiene la sección Ofertas: mismo control en Ofertas y en Clientes del activo.",
+    ],
+  },
+  {
+    id: "nov20-avisos",
+    fase: "20 nov 2026",
+    title: "Avisos por email y WhatsApp",
+    where: "Cruce de demanda, Mis datos y /api/whatsapp/webhook",
+    href: "/admin/oportunidades",
+    icon: Mail,
+    what: [
+      "Email con Resend si CRUCE_DEMANDA_EMAIL_ENABLED=true. EMAIL_DRY_RUN sigue mandando solo a consola.",
+      "WhatsApp Cloud API en src/lib/whatsapp.ts. Desactivado salvo WHATSAPP_ENABLED=true. WHATSAPP_DRY_RUN (por defecto) solo escribe log.",
+      "Hace falta teléfono y acepta_whatsapp. Máximo 2 avisos por semana y comprador (lunes UTC), controlado en comprador_avisos.",
+      "Variables: WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_ACCESS_TOKEN, WHATSAPP_TEMPLATE_OPORTUNIDADES (cuerpo {{1}} nombre, {{2}} resumen), WHATSAPP_VERIFY_TOKEN.",
+      "GET /api/whatsapp/webhook verifica el token. POST guarda el mensaje en whatsapp_mensajes y lo enlaza por teléfono. Si WHATSAPP_ENABLED no es true, la ruta responde 404.",
+    ],
+    howToTest: [
+      "En Mis datos, comprador1 marca el consentimiento de WhatsApp. El gestor también puede marcarlo en la ficha.",
+      "Con EMAIL_DRY_RUN y el flag de email, lanza el cruce y mira la consola. Sin WHATSAPP_ENABLED no sale WhatsApp.",
+      "Con WHATSAPP_ENABLED=true y WHATSAPP_DRY_RUN, el log muestra el aviso y no llama a Meta.",
+    ],
+  },
+];
+
 const AUGUST_2026_STEPS: Step[] = [
   {
     id: "aug26-ofertas-agente",
@@ -165,7 +257,7 @@ const LEGACY_STEPS: Step[] = [
     id: "f1-categoria",
     fase: "Fase 1",
     title: "Categoría libre en el Excel (CDR, NPL, OCUPADO…)",
-    where: "Admin → Activos → Nuevo Activo (import Excel)",
+    where: "Admin → Activos → Importar Excel",
     href: "/admin",
     what: [
       "Migración staging: assets.referencia + public_slug + sin CHECK CDR/NPL.",
@@ -312,6 +404,44 @@ export default function GuiaStagingPage() {
           promover a producción.
         </p>
       </header>
+
+      {/* 20 nov 2026 */}
+      <section className="mb-10">
+        <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-navy">
+          <span className="rounded-full bg-gold/15 px-3 py-1 text-xs font-bold uppercase tracking-wider text-gold">
+            20 nov 2026
+          </span>
+          Alta, demandas, seguimiento y avisos
+        </h2>
+        <ol className="space-y-6">
+          {NOVIEMBRE_2026_STEPS.map((step, index) => {
+            const StepIcon = step.icon || Building2;
+            return (
+              <li key={step.id} id={step.id} className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gold text-xs font-bold text-white">
+                    {index + 1}
+                  </span>
+                  <StepIcon size={16} className="text-gold" />
+                  <h3 className="text-base font-semibold text-navy">{step.title}</h3>
+                </div>
+                <p className="mb-3 text-xs text-muted">{step.where}</p>
+                <ul className="mb-3 list-disc space-y-1 pl-4 text-sm text-navy/90">
+                  {step.what.map((line) => <li key={line}>{line}</li>)}
+                </ul>
+                <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted">Cómo probarlo</p>
+                <ol className="list-decimal space-y-1 pl-4 text-sm text-navy/90">
+                  {step.howToTest.map((line) => <li key={line}>{line}</li>)}
+                </ol>
+                <Link href={step.href} className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-gold hover:underline">
+                  Ir a la pantalla
+                  <ArrowRight size={14} />
+                </Link>
+              </li>
+            );
+          })}
+        </ol>
+      </section>
 
       {/* Agosto 2026 changes - newest first */}
       <section className="mb-10">

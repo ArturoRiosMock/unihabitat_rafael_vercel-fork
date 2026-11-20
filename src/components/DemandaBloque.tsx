@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Loader2, Save, Search } from "lucide-react";
 import {
+  archivarDemandaComprador,
+  borrarDemandaComprador,
   buscarOportunidadesComprador,
   fetchDemandaComprador,
   fetchOportunidadesComprador,
@@ -12,6 +14,7 @@ import {
   registrarOportunidadesComprador,
 } from "@/app/actions/cruce-demanda";
 import { raiseActionError } from "@/lib/action-result";
+import { formatCommentTimestamp } from "@/lib/comment-author";
 import {
   CATALOGO_CATEGORIAS,
   ETIQUETA_ESTADO_OPORTUNIDAD,
@@ -63,6 +66,8 @@ export function DemandaBloque({
   const [precioMin, setPrecioMin] = useState("");
   const [precioMax, setPrecioMax] = useState("");
   const [saving, setSaving] = useState(false);
+  const [demandas, setDemandas] = useState<DemandaComprador[]>([]);
+  const [avisoGuardada, setAvisoGuardada] = useState("");
   const [oportunidades, setOportunidades] = useState<OportunidadVista[]>([]);
   const [preview, setPreview] = useState<FichaPublicaOportunidad[] | null>(null);
   const [previewNivel, setPreviewNivel] = useState<string>("");
@@ -89,6 +94,7 @@ export function DemandaBloque({
       raiseActionError(demandaResult);
       raiseActionError(oportunidadesResult);
       aplicar(demandaResult.demanda);
+      setDemandas(demandaResult.demandas);
       setOportunidades(oportunidadesResult.oportunidades);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo cargar la demanda");
@@ -134,6 +140,8 @@ export function DemandaBloque({
       });
       raiseActionError(result);
       aplicar(result.demanda);
+      setDemandas(result.demandas);
+      setAvisoGuardada("Demanda guardada");
       toast.success("Demanda guardada");
     } catch (err) {
       toast.error("No se pudo guardar la demanda", {
@@ -166,6 +174,21 @@ export function DemandaBloque({
     try {
       const result = await registrarOportunidadesComprador(compradorId);
       raiseActionError(result);
+      if (result.requiereConfirmacion) {
+        const texto = result.avisos.map((aviso) => `${aviso.assetId}: ${aviso.mensaje}`).join("\n");
+        const sigue = window.confirm(`${texto}\n¿Quieres enviarlo de nuevo?`);
+        if (!sigue) return;
+        const confirmado = await registrarOportunidadesComprador(compradorId, true);
+        raiseActionError(confirmado);
+        setPreview(null);
+        await cargar();
+        toast.success("Oportunidades registradas", {
+          description: confirmado.fichas.length === 0
+            ? "No había activos nuevos para esta demanda"
+            : `${confirmado.fichas.length} activos`,
+        });
+        return;
+      }
       setPreview(null);
       await cargar();
       const aviso = result.email === "enviado"
@@ -182,6 +205,33 @@ export function DemandaBloque({
       });
     } finally {
       setRegistrando(false);
+    }
+  }
+
+  async function archivar(id: string) {
+    try {
+      const result = await archivarDemandaComprador(compradorId, id);
+      raiseActionError(result);
+      setDemandas(result.demandas);
+      toast.success("Demanda archivada");
+    } catch (err) {
+      toast.error("No se pudo archivar", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  async function borrar(id: string) {
+    if (!window.confirm("¿Borrar esta demanda?")) return;
+    try {
+      const result = await borrarDemandaComprador(compradorId, id);
+      raiseActionError(result);
+      setDemandas(result.demandas);
+      toast.success("Demanda borrada");
+    } catch (err) {
+      toast.error("No se pudo borrar", {
+        description: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
@@ -289,6 +339,58 @@ export function DemandaBloque({
         </div>
       </section>
 
+      <section className="rounded-lg border border-border bg-white p-5 shadow-sm" data-testid="demandas-guardadas">
+        <h2 className="mb-1 text-[10px] font-semibold uppercase tracking-[1.5px] text-gold">Demandas guardadas</h2>
+        <p className="mb-3 text-xs text-muted">
+          Cada guardado crea una demanda. El cruce usa todas las que están activas.
+        </p>
+        {avisoGuardada ? (
+          <p className="mb-3 rounded-md border border-green/30 bg-green/5 px-3 py-2 text-sm font-medium text-navy" role="status">
+            {avisoGuardada}
+          </p>
+        ) : null}
+        {demandas.length === 0 ? (
+          <p className="text-sm text-muted">Todavía no hay demandas guardadas.</p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {demandas.map((demanda) => (
+              <li key={demanda.id ?? demanda.createdAt} className="flex flex-wrap items-start justify-between gap-3 py-3">
+                <div>
+                  <p className="text-sm text-navy">{resumenDemanda(demanda)}</p>
+                  <p className="text-xs text-muted">
+                    {formatCommentTimestamp(demanda.createdAt) ?? "—"}
+                    {" · "}
+                    {demanda.autor || "Gestor"}
+                    {" · "}
+                    {demanda.estado === "archivada" ? "Archivada" : "Activa"}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  {demanda.estado !== "archivada" && demanda.id ? (
+                    <button
+                      type="button"
+                      onClick={() => void archivar(demanda.id as string)}
+                      className="rounded-md border border-border px-2.5 py-1 text-[11px] font-medium text-navy"
+                    >
+                      Archivar
+                    </button>
+                  ) : null}
+                  {demanda.id ? (
+                    <button
+                      type="button"
+                      onClick={() => void borrar(demanda.id as string)}
+                      className="rounded-md border border-border px-2.5 py-1 text-[11px] font-medium text-red"
+                    >
+                      Borrar
+                    </button>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       <section className="rounded-lg border border-border bg-white p-5 shadow-sm">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-[10px] font-semibold uppercase tracking-[1.5px] text-gold">
@@ -391,6 +493,18 @@ export function DemandaBloque({
       </section>
     </div>
   );
+}
+
+function resumenDemanda(demanda: DemandaComprador): string {
+  const partes = [
+    demanda.categorias.join(", ") || "Sin categoría",
+    demanda.provincias.join(", "),
+    demanda.poblaciones.join(", "),
+  ].filter(Boolean);
+  const min = demanda.precioMin != null ? `desde ${demanda.precioMin.toLocaleString("es-ES")} €` : "";
+  const max = demanda.precioMax != null ? `hasta ${demanda.precioMax.toLocaleString("es-ES")} €` : "";
+  const precio = [min, max].filter(Boolean).join(" ");
+  return [partes.join(" · "), precio].filter(Boolean).join(" · ");
 }
 
 function Campo({

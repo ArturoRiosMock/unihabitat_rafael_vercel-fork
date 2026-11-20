@@ -11,6 +11,7 @@ import Link from "next/link";
 import type { Asset } from "@/lib/types";
 import { Search, Star, X, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Plus, Check, Trash2, Download } from "lucide-react";
 import { UploadActivosModal } from "./UploadActivosModal";
+import { NuevoActivoModal } from "@/components/NuevoActivoModal";
 import { FilterSelect } from "@/components/FilterSelect";
 import { deleteAssetsByIds, toggleAssetPub } from "@/app/actions/assets";
 import { isAdmin } from "@/lib/auth-helpers";
@@ -78,6 +79,7 @@ export default function ActivosPage() {
   const userIsAdmin = isAdmin(session);
 
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [q, setQ] = useState("");
   const [fCat, setFCat] = useState("");
@@ -272,6 +274,7 @@ export default function ActivosPage() {
   return (
     <>
       <UploadActivosModal open={uploadOpen} onClose={() => setUploadOpen(false)} />
+      <NuevoActivoModal open={manualOpen} onClose={() => setManualOpen(false)} />
       {/* Topbar */}
       <div className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-border bg-white px-6">
         <div className="flex items-center gap-3">
@@ -281,13 +284,22 @@ export default function ActivosPage() {
         <div className="flex items-center gap-2">
           <span className="rounded-md bg-gold/10 px-2.5 py-1 text-xs font-medium text-gold">{userIsAdmin ? "Admin" : "Agente"}</span>
           {userIsAdmin && (
-            <button
-              type="button"
-              onClick={() => setUploadOpen(true)}
-              className="flex items-center gap-1.5 rounded-lg bg-navy px-3.5 py-2 text-xs font-medium text-white transition-colors hover:bg-navy3"
-            >
-              <Plus size={14} /> Nuevo Activo
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => setManualOpen(true)}
+                className="flex items-center gap-1.5 rounded-lg bg-navy px-3.5 py-2 text-xs font-medium text-white transition-colors hover:bg-navy3"
+              >
+                <Plus size={14} /> Nuevo activo
+              </button>
+              <button
+                type="button"
+                onClick={() => setUploadOpen(true)}
+                className="flex items-center gap-1.5 rounded-lg border border-navy px-3.5 py-2 text-xs font-medium text-navy transition-colors hover:bg-cream"
+              >
+                <Plus size={14} /> Importar Excel
+              </button>
+            </>
           )}
         </div>
       </div>

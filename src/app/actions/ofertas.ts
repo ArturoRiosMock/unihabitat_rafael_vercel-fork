@@ -25,12 +25,17 @@ import {
   mensajeErrorOferta,
   MENSAJE_OFERTA_AGENTE_DUPLICADA,
   MENSAJE_OFERTA_DUPLICADA,
+  notificarCambioSeguimiento,
+  puedeEditarSeguimiento,
   puedeVerOferta,
+  seguimientoODefecto,
   validarCambioOferta,
+  validarSeguimiento,
   type CambioOfertaInput,
   type OfertaEstado,
   type OfertaHistorialRow,
   type OfertaRow,
+  type SeguimientoOferta,
 } from "@/lib/oferta-workflow";
 
 function commentAttribution(session: UserSession | null, comentarios: string | null): {
@@ -61,6 +66,7 @@ function presentOferta(row: OfertaRow): OfertaRow {
   const presented: OfertaRow = {
     ...row,
     propuesta_euros: asNumber(row.propuesta_euros),
+    seguimiento: seguimientoODefecto(row.seguimiento),
     fecha_firma: row.fecha_firma ?? null,
     contraoferta_nota: row.contraoferta_nota ?? null,
   };
@@ -127,6 +133,8 @@ async function insertHistorial(
     nota: string | null;
     author: string;
     author_role: string;
+    seguimiento_desde?: string | null;
+    seguimiento_hasta?: string | null;
   },
 ): Promise<void> {
   const { error } = await sb.from("oferta_historial").insert(row);
@@ -561,14 +569,28 @@ export async function createOfertaAdmin(params: {
   }
 }
 
+async function agenteTieneSeccionOfertas(session: UserSession): Promise<boolean> {
+  if (session.role !== "vendedor" || !session.vendedorId) return false;
+  const sb = await createServiceClient();
+  const { data, error } = await sb
+    .from("vendedor_permissions")
+    .select("can_view, can_edit")
+    .eq("vendedor_id", session.vendedorId)
+    .eq("section", "ofertas")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return Boolean(data?.can_view || data?.can_edit);
+}
+
 async function leerOfertas(
   sb: SupabaseClient,
   session: UserSession,
-  filtro: { estado?: OfertaEstado | ""; assetId?: string },
+  filtro: { estado?: OfertaEstado | ""; seguimiento?: SeguimientoOferta | ""; assetId?: string },
 ): Promise<OfertaRow[]> {
   let query = sb.from("ofertas").select("*").order("created_at", { ascending: false });
   if (filtro.assetId) query = query.eq("asset_id", filtro.assetId);
   if (filtro.estado && esOfertaEstado(filtro.estado)) query = query.eq("estado", filtro.estado);
+  if (filtro.seguimiento) query = query.eq("seguimiento", filtro.seguimiento);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
   const rows = (data ?? []) as OfertaRow[];
@@ -653,10 +675,13 @@ export async function fetchOfertasPendientes(): Promise<OfertaRow[]> {
  * Admin: todas. Agente: las suyas (vendedor_id) y las de sus compradores.
  * No incluye ofertas de compradores de otro agente.
  */
-export async function fetchOfertas(estado?: OfertaEstado | ""): Promise<OfertaRow[]> {
+export async function fetchOfertas(
+  estado?: OfertaEstado | "",
+  seguimiento?: SeguimientoOferta | "",
+): Promise<OfertaRow[]> {
   const session = await requireAdminOrVendor();
   const supabase = await createServiceClient();
-  return leerOfertas(supabase, session, { estado });
+  return leerOfertas(supabase, session, { estado, seguimiento });
 }
 
 /**
@@ -704,6 +729,68 @@ async function updateOfertaEstadoUnchecked(input: CambioOfertaInput): Promise<vo
     author: author.author,
     author_role: author.author_role,
   });
+}
+
+/**
+ * Cambia solo el seguimiento. El estado de workflow no se mueve.
+ * Queda en el historial y dispara `notificarCambioSeguimiento`.
+ */
+export async function updateOfertaSeguimiento(
+  ofertaId: string,
+  seguimiento: SeguimientoOferta,
+): Promise<ActionResult<{ seguimiento: SeguimientoOferta }>> {
+  try {
+    const session = await requireAdminOrVendor();
+    const id = ofertaId?.trim();
+    if (!id) return { ok: false, error: "Falta la oferta" };
+    const puede = puedeEditarSeguimiento({
+      role: session.role,
+      puedeVerOfertas: session.role === "admin" || await agenteTieneSeccionOfertas(session),
+    });
+    if (!puede) return { ok: false, error: "Sin permiso en ofertas" };
+
+    const sb = await createServiceClient();
+    const { data, error } = await sb.from("ofertas").select("*").eq("id", id).maybeSingle();
+    if (error) return { ok: false, error: error.message };
+    if (!data) return { ok: false, error: "Oferta no encontrada" };
+    const actual = presentOferta(data as OfertaRow);
+    await assertPuedeGestionarOferta(session, sb, actual);
+
+    const check = validarSeguimiento(actual.seguimiento, seguimiento);
+    if (!check.ok) return check;
+
+    const { error: updateError } = await sb
+      .from("ofertas")
+      .update({ seguimiento: check.hasta, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (updateError) return { ok: false, error: updateError.message };
+
+    const author = authorHistorial(session);
+    const at = new Date().toISOString();
+    await insertHistorial(sb, {
+      oferta_id: id,
+      estado_desde: actual.estado,
+      estado_hasta: actual.estado,
+      importe_anterior: actual.propuesta_euros,
+      importe_nuevo: actual.propuesta_euros,
+      nota: null,
+      author: author.author,
+      author_role: author.author_role,
+      seguimiento_desde: check.desde,
+      seguimiento_hasta: check.hasta,
+    });
+    await notificarCambioSeguimiento({
+      ofertaId: id,
+      desde: check.desde,
+      hasta: check.hasta,
+      author: author.author,
+      authorRole: author.author_role,
+      at,
+    });
+    return { ok: true, seguimiento: check.hasta };
+  } catch (err) {
+    return actionError(err, "No se pudo cambiar el seguimiento");
+  }
 }
 
 export async function updateOfertaEstado(input: CambioOfertaInput): Promise<ActionResult> {

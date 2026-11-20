@@ -287,6 +287,7 @@ export function rowToComprador(r: any): Comprador {
     estadoC: r.estado_c ?? "fp-nd",
     nda: r.nda ?? "Pendiente",
     acceso,
+    aceptaWhatsapp: r.acepta_whatsapp === true,
     ultimaGestionAgenteAt: r.ultima_gestion_agente_at ?? null,
     reasignadoInactividadAt: r.reasignado_inactividad_at ?? null,
   };
@@ -319,6 +320,7 @@ export function compradorToRow(c: Comprador) {
     estado_c: c.estadoC,
     nda: c.nda,
     acceso: c.acceso === "sin_acceso" ? "sin_acceso" : "activo",
+    acepta_whatsapp: c.aceptaWhatsapp === true,
   };
 }
 

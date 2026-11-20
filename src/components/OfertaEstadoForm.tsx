@@ -6,6 +6,7 @@ import { formatCommentTimestamp } from "@/lib/comment-author";
 import { parseLocaleMoneyInput } from "@/lib/utils";
 import {
   etiquetaEstado,
+  etiquetaSeguimiento,
   transicionesDesde,
   type OfertaEstado,
   type OfertaHistorialRow,
@@ -22,13 +23,18 @@ export function OfertaHistorialLista({ historial }: { historial: OfertaHistorial
     <ol className="mt-3 space-y-1.5" data-testid="oferta-historial">
       {historial.map((item) => {
         const cuando = formatCommentTimestamp(item.created_at);
+        const cambioSeguimiento = item.seguimiento_desde && item.seguimiento_hasta
+          && item.seguimiento_desde !== item.seguimiento_hasta;
         const desde = item.estado_desde ? etiquetaEstado(item.estado_desde) : "Alta";
         const hacia = etiquetaEstado(item.estado_hasta);
+        const texto = cambioSeguimiento
+          ? `Seguimiento: ${etiquetaSeguimiento(item.seguimiento_desde ?? "")} → ${etiquetaSeguimiento(item.seguimiento_hasta ?? "")}`
+          : `${desde} → ${hacia}`;
         return (
           <li key={item.id} className="rounded-md bg-cream2 px-3 py-2 text-[11px] text-text">
             <span className="font-semibold text-navy">{item.author || "Gestor"}</span>
             {cuando ? <span className="text-muted"> · {cuando}</span> : null}
-            <span> · {desde} → {hacia}</span>
+            <span> · {texto}</span>
             {item.importe_nuevo != null ? <span> · {euros(item.importe_nuevo)} €</span> : null}
             {item.nota ? <p className="mt-1 text-text">{item.nota}</p> : null}
           </li>
