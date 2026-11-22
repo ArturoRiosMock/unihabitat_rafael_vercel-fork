@@ -1,8 +1,8 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from "react";
-import { usePathname } from "next/navigation";
+import { createContext, useContext, useState, useCallback, useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import type { Asset, Comprador, Vendedor, Tarea } from "./types";
+import { type CatalogScope } from "@/lib/catalog-scope";
 import type { VendorPermission, UserSession } from "./permissions";
 import { defaultVendorPermissions } from "./permissions";
 // `assets` y `compradores` de mock-data ya NO se usan como semilla inicial;
@@ -57,7 +57,17 @@ interface AppContextType extends AppState {
 
 const AppContext = createContext<AppContextType | null>(null);
 
-export function AppProvider({ children }: { children: ReactNode }) {
+type EnsureCatalog = (scope: CatalogScope) => void;
+const EnsureCatalogContext = createContext<EnsureCatalog>(() => {});
+
+export function AppProvider({
+  children,
+  autoload = false,
+}: {
+  children: ReactNode;
+  /** Los tests piden el catálogo al montar. En la app solo lo pide el layout de admin. */
+  autoload?: boolean;
+}) {
   // Inicializamos `assets` y `compradores` vacíos para que la lista nunca
   // arranque con los mocks de `mock-data.ts`. Los datos reales llegan de
   // Supabase y se exponen `*Loading` / `*Error` para que la UI distinga
@@ -69,11 +79,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     compradores: [],
     vendedores: [],
     tareas: tareasData,
-    assetsLoading: true,
+    assetsLoading: autoload,
     assetsError: null,
-    compradoresLoading: true,
+    compradoresLoading: autoload,
     compradoresError: null,
-    vendedoresLoading: true,
+    vendedoresLoading: autoload,
     vendedoresError: null,
   });
 
@@ -82,7 +92,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [permissions, setPermissions] = useState<VendorPermission[]>([]);
   const [assignedAssetIds, setAssignedAssetIds] = useState<string[]>([]);
   const [assignedCompradorIds, setAssignedCompradorIds] = useState<string[]>([]);
-  const pathname = usePathname();
 
   const assetsLoadTokenRef = useRef(0);
   const compradoresLoadTokenRef = useRef(0);
@@ -198,13 +207,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [pathname]);
+  }, []);
+
+  const catalogStarted = useRef({ assets: false, compradores: false, vendedores: false });
+
+  const ensureCatalog = useCallback((scope: CatalogScope) => {
+    if (scope.assets && !catalogStarted.current.assets) {
+      catalogStarted.current.assets = true;
+      void loadAssetsFromServer();
+    }
+    if (scope.compradores && !catalogStarted.current.compradores) {
+      catalogStarted.current.compradores = true;
+      void loadCompradoresFromServer();
+    }
+    if (scope.vendedores && !catalogStarted.current.vendedores) {
+      catalogStarted.current.vendedores = true;
+      void loadVendedoresFromServer();
+    }
+  }, [loadAssetsFromServer, loadCompradoresFromServer, loadVendedoresFromServer]);
 
   useEffect(() => {
-    void loadAssetsFromServer();
-    void loadCompradoresFromServer();
-    void loadVendedoresFromServer();
-  }, [loadAssetsFromServer, loadCompradoresFromServer, loadVendedoresFromServer]);
+    if (!autoload) return;
+    ensureCatalog({ assets: true, compradores: true, vendedores: true });
+  }, [autoload, ensureCatalog]);
 
   useEffect(() => {
     const onAssetsUpdated = () => {
@@ -326,6 +351,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const getVendedor = useCallback((id: string) => state.vendedores.find(v => v.id === id), [state.vendedores]);
 
   return (
+    <EnsureCatalogContext.Provider value={ensureCatalog}>
     <AppContext.Provider value={{
       assets: filteredAssets,
       compradores: filteredCompradores,
@@ -348,7 +374,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }}>
       {children}
     </AppContext.Provider>
+    </EnsureCatalogContext.Provider>
   );
+}
+
+/** Pide al provider solo las listas que usa la pantalla actual. */
+export function useEnsureCatalog(scope: CatalogScope) {
+  const ensure = useContext(EnsureCatalogContext);
+  useLayoutEffect(() => {
+    ensure(scope);
+  }, [ensure, scope.assets, scope.compradores, scope.vendedores]);
 }
 
 export function useApp() {

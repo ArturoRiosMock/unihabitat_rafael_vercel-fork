@@ -73,7 +73,8 @@ flowchart TB
 |-----------|-----------|
 | [Variáveis de ambiente](operacoes/variaveis-ambiente.md) | Referência completa de env vars |
 | [Migrations Supabase](operacoes/migrations-supabase.md) | Ficheiros SQL e ordem |
-| [Deploy Vercel](operacoes/deploy-vercel.md) | Build, env, domínio |
+| [Deploy Vercel](operacoes/deploy-vercel.md) | Build, env, domínio, região `fra1` |
+| [Rendimento do portal](operacoes/rendimiento-portal.md) | Listagem paginada, mapa, ISR e seed de carga |
 | [Troubleshooting](operacoes/troubleshooting.md) | Problemas comuns |
 | [Seguimiento tareas cliente](seguimiento-tareas-cliente.md) | Checklist ops (solo staging; no prod) |
 | [Staging frontend + BD](operacoes/staging.md) | Supabase staging + Vercel Preview separados de prod |

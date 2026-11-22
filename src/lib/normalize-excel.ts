@@ -13,7 +13,6 @@
  *   - `ID1` agrupa propiedades del mismo activo/préstamo
  */
 
-import * as XLSX from "xlsx";
 import type { Asset, Propiedad } from "./types";
 import { faseToCode } from "./fase-interna";
 import { CONTACTO_HEADER_ALIASES, PROPIETARIO_HEADER_ALIASES } from "./propietario-contacto";
@@ -445,6 +444,7 @@ function mergeInmuebles(prev: Asset, next: Asset): Asset {
 /* ------------------------------------------------------------------ */
 
 export async function parseTemplateExcel(file: File): Promise<ParseTemplateResult> {
+  const XLSX = await import("xlsx");
   const buffer = await file.arrayBuffer();
   const wb = XLSX.read(new Uint8Array(buffer), { type: "array" });
   const sheetName = wb.SheetNames[0];

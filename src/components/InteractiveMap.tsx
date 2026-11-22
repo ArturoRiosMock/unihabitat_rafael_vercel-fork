@@ -37,9 +37,11 @@ interface InteractiveMapProps {
   mapImageUrl?: string | null;
   label?: string;
   className?: string;
+  /** Si detrás ya hay una imagen con tamaño, el velo de carga no la tapa. */
+  transparentLoader?: boolean;
 }
 
-export function InteractiveMap({ lat: rawLat, lng: rawLng, mapImageUrl, label, className = "" }: InteractiveMapProps) {
+export function InteractiveMap({ lat: rawLat, lng: rawLng, mapImageUrl, label, className = "", transparentLoader = false }: InteractiveMapProps) {
   /** Nunca extraer el centro de una URL "España/Madrid" (placeholder): eso fijaba Malina en el primer paint. */
   const parsedLat = toCoord(rawLat);
   const parsedLng = toCoord(rawLng);
@@ -153,7 +155,7 @@ export function InteractiveMap({ lat: rawLat, lng: rawLng, mapImageUrl, label, c
     <div className={`sticky overflow-hidden ${className}`}>
       <div ref={containerRef} className="h-full w-full" />
       {!loaded && !error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-cream2">
+        <div className={`absolute inset-0 flex items-center justify-center ${transparentLoader ? "bg-transparent" : "bg-cream2"}`}>
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-gold border-t-transparent" />
         </div>
       )}

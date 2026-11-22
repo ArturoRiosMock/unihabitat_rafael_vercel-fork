@@ -7,13 +7,14 @@ import Link from "next/link";
 import type { Asset } from "@/lib/types";
 import { publicationListLabel } from "@/lib/asset-publication";
 import { Home, FolderOpen, Briefcase, Users, Lock, ArrowLeft, Upload, Download, FileText, FileSpreadsheet, Image, MessageSquare, Save, Plus, Mail, X, Loader2, AlertCircle, CheckCircle2, CheckCircle, Building, ExternalLink, RefreshCw, UserCog, Send, Link2 } from "lucide-react";
-import { uploadDocumento, fetchDocumentos, deleteDocumento, getDocumentUrl, getAssetDocumentosGate, type DocRow } from "@/app/actions/documentos";
+import { uploadDocumento, deleteDocumento, getDocumentUrl, type DocRow } from "@/app/actions/documentos";
+import { fetchAssetCaracteristicasPanel, fetchAssetDocumentacionPanel } from "@/app/actions/asset-panels";
 import { AssetNdaAcceptForm, AssetNdaSigners } from "@/components/AssetNdaGate";
 import type { AssetDocumentosGate } from "@/lib/nda";
 import { createNota, deleteNota, fetchNotas, type NotaRow } from "@/app/actions/notas";
 import { AssetNoteCard } from "@/components/AssetNoteCard";
 import { fetchCompradores } from "@/app/actions/compradores";
-import { fetchAssetByIdForAdmin, fetchAssetsByActivoIdForAdmin, toggleAssetPub, updateAssetFields, updatePropiedadFields } from "@/app/actions/assets";
+import { fetchAssetByIdForAdmin, toggleAssetPub, updateAssetFields, updatePropiedadFields } from "@/app/actions/assets";
 import { inviteCompradorToAsset, revokeCompradorFromAsset, fetchInvitedCompradores } from "@/app/actions/invitations";
 import { enviarSolicitudInformacion } from "@/app/actions/email-info-request";
 import { raiseActionError } from "@/lib/action-result";
@@ -125,6 +126,14 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
       setToggling(false);
     }
   };
+
+  if (remoteAsset === undefined && !ctxAsset) {
+    return (
+      <div className="flex flex-1 items-center justify-center text-sm text-muted">
+        Cargando activo…
+      </div>
+    );
+  }
 
   if (!asset) return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted">
@@ -367,32 +376,23 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset, canDelet
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        const notes = await fetchNotas({ assetId, scope: "activo" });
-        if (!cancelled) setAssetNotesList(notes);
-      } catch {
-        if (!cancelled) setAssetNotesList([]);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [assetId]);
-
-  // Fetch sibling assets (same activoId / operación)
-  useEffect(() => {
-    const activoId = asset.propiedades[0]?.activoId;
-    if (!activoId || activoId === "—") {
-      setSiblingAssets([]);
-      return;
-    }
-    let cancelled = false;
+    const activoId = asset.propiedades[0]?.activoId ?? null;
     setLoadingSiblings(true);
-    fetchAssetsByActivoIdForAdmin(activoId, assetId)
-      .then((siblings) => {
-        if (!cancelled) setSiblingAssets(siblings);
+    fetchAssetCaracteristicasPanel(assetId, activoId)
+      .then((result) => {
+        if (cancelled) return;
+        if (!result.ok) {
+          setAssetNotesList([]);
+          setSiblingAssets([]);
+          return;
+        }
+        setAssetNotesList(result.notes);
+        setSiblingAssets(result.siblings);
       })
       .catch(() => {
-        if (!cancelled) setSiblingAssets([]);
+        if (cancelled) return;
+        setAssetNotesList([]);
+        setSiblingAssets([]);
       })
       .finally(() => {
         if (!cancelled) setLoadingSiblings(false);
@@ -974,14 +974,10 @@ function TabDocumentacion({ assetId, currentUser, isAdmin: adminView }: { assetI
     setLoading(true);
     setLoadError("");
     try {
-      const nextGate = await getAssetDocumentosGate(assetId);
-      setGate(nextGate);
-      if (nextGate.state !== "open") {
-        setDocs([]);
-        return;
-      }
-      const fetched = await fetchDocumentos({ assetId });
-      setDocs(fetched);
+      const panel = await fetchAssetDocumentacionPanel(assetId);
+      if (!panel.ok) throw new Error(panel.error);
+      setGate(panel.gate);
+      setDocs(panel.docs);
     } catch (err) {
       // El fallo se queda en la pestaña. No hay navegación a /admin:
       // un documento ajeno es «Acceso denegado», no una sección prohibida.

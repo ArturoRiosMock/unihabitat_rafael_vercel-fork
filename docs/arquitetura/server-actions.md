@@ -12,8 +12,9 @@ Todas em `src/app/actions/`. Padrão: `"use server"`, auth via `auth-server.ts`,
 
 | Função | Descrição |
 |--------|-----------|
-| `fetchAssets` | Lista completa (admin) |
-| `fetchPublicAssets` | Imóveis publicados (portal) |
+| `fetchAssets` | Lista admin (colunas do listado, sem `excel_raw`). Só a carrega o ecrã que a usa |
+| `fetchPublicAssets` | Imóveis publicados (portal) — já não alimenta cada página |
+| `fetchPortalListing` / `fetchPortalMapPoints` / `fetchPortalFilterOptions` | Listagem `/portal`: uma página, filtros na query string, marcadores leves. Tipos em `src/lib/portal-listing.ts` |
 | `fetchAssetsByIds` | Batch por IDs |
 | `fetchAssetById` / `fetchAssetByIdForAdmin` | Detalhe |
 | `fetchPropiedades` / `fetchPropiedadesPublic` | Cargas |

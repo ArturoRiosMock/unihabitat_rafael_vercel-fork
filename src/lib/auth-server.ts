@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import type { UserSession, SectionId } from "./permissions";
 import { isDevAuthEnabled, resolveRole } from "./auth-role";
@@ -7,7 +8,7 @@ import { isDevAuthEnabled, resolveRole } from "./auth-role";
  * y, si no existe, intenta resolver con Supabase Auth para que los usuarios
  * registrados vía signUp/signIn también queden reconocidos.
  */
-export async function getServerSession(): Promise<UserSession | null> {
+export const getServerSession = cache(async function getServerSession(): Promise<UserSession | null> {
   const cookieStore = await cookies();
   const raw = cookieStore.get("dev-auth")?.value;
   if (raw && isDevAuthEnabled()) {
@@ -60,7 +61,7 @@ export async function getServerSession(): Promise<UserSession | null> {
   } catch {
     return null;
   }
-}
+});
 
 export async function requireAdmin(): Promise<UserSession> {
   const session = await getServerSession();

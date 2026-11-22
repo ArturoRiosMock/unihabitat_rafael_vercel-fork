@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Lock } from "lucide-react";
-import { fetchAssetById, fetchPublicAssetsByActivoId } from "@/app/actions/assets";
 import { publicAssetPath } from "@/lib/public-slug";
+import { getCachedPublicFichaById } from "@/lib/portal-public-asset";
 import PortalDetailClient from "./PortalDetailClient";
+
+export const revalidate = 300;
 
 /**
  * Ruta legacy `/portal/{id}` → redirige a `/portal/inmueble/{slug}` canónico.
@@ -16,10 +18,9 @@ export default async function PortalDetailLegacyPage({
 }) {
   const { id: raw } = await params;
   const id = decodeURIComponent(raw);
+  const ficha = await getCachedPublicFichaById(id);
 
-  const asset = await fetchAssetById(id);
-
-  if (!asset || !asset.pub) {
+  if (!ficha) {
     return (
       <div className="mx-auto max-w-7xl px-6 py-20 text-center">
         <Lock size={40} strokeWidth={1} className="mx-auto text-border" />
@@ -31,20 +32,9 @@ export default async function PortalDetailLegacyPage({
     );
   }
 
-  if (asset.publicSlug) {
-    redirect(publicAssetPath(asset.publicSlug));
+  if (ficha.asset.publicSlug) {
+    redirect(publicAssetPath(ficha.asset.publicSlug));
   }
 
-  let siblings: Awaited<ReturnType<typeof fetchPublicAssetsByActivoId>> = [];
-  const activoId = asset.propiedades[0]?.activoId ?? "";
-  if (activoId && activoId !== "—" && activoId.trim()) {
-    try {
-      const group = await fetchPublicAssetsByActivoId(activoId);
-      siblings = group.filter((a) => a.id !== asset.id);
-    } catch {
-      siblings = [];
-    }
-  }
-
-  return <PortalDetailClient asset={asset} siblings={siblings} />;
+  return <PortalDetailClient asset={ficha.asset} siblings={ficha.siblings} />;
 }

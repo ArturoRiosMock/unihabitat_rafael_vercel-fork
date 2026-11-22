@@ -126,13 +126,9 @@ vi.mock("@/lib/toast", () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
-vi.mock("@/lib/asset-excel", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/asset-excel")>("@/lib/asset-excel");
-  return {
-    ...actual,
-    downloadAssetsWorkbook: (...args: unknown[]) => mocks.downloadAssetsWorkbook(...args),
-  };
-});
+vi.mock("@/lib/asset-excel-workbook", () => ({
+  downloadAssetsWorkbook: (...args: unknown[]) => mocks.downloadAssetsWorkbook(...args),
+}));
 
 import ActivosPage from "@/app/admin/page";
 

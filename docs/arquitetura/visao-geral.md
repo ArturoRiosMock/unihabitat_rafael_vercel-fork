@@ -68,7 +68,7 @@ sequenceDiagram
 
 1. **Server actions** — mutações via `createServiceClient()` (service-role); reads conforme RLS ou service-role
 2. **Mappers** — [`src/lib/supabase/db.ts`](../../src/lib/supabase/db.ts) converte snake_case ↔ camelCase
-3. **React Context** — [`src/lib/context.tsx`](../../src/lib/context.tsx) mantém `assets`, `compradores`, `vendedores`, `tareas` no cliente com métodos `refresh*`
+3. **React Context** — [`src/lib/context.tsx`](../../src/lib/context.tsx) resolve a sessão uma vez. `assets`, `compradores` e `vendedores` só entram no cliente do ecrã admin que os usa (`catalogNeedsForPath`). `/portal` pagina no servidor. Ver [rendimiento-portal.md](../operacoes/rendimiento-portal.md).
 
 ## Autenticação
 

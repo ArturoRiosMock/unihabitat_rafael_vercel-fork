@@ -21,6 +21,51 @@ function normalizeRole(raw: string | undefined | null): PortalRole {
   return null;
 }
 
+type PortalAuthSnapshot = {
+  loggedIn: boolean;
+  role: PortalRole;
+  currentUser: { email: string; nombre: string } | null;
+};
+
+let portalAuthSnapshot: Promise<PortalAuthSnapshot> | null = null;
+
+async function readPortalAuth(): Promise<PortalAuthSnapshot> {
+  const dev = getDevAuthFromDocument();
+  if (dev) {
+    const devRole = normalizeRole(dev.role);
+    return {
+      loggedIn: true,
+      role: devRole,
+      currentUser: devRole === "cliente" || devRole === "vendedor"
+        ? { email: dev.email, nombre: dev.nombre }
+        : null,
+    };
+  }
+  try {
+    const sb = createClient();
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return { loggedIn: false, role: null, currentUser: null };
+    const userRole = normalizeRole(user.user_metadata?.role as string | undefined) ?? "cliente";
+    return {
+      loggedIn: true,
+      role: userRole,
+      currentUser: (userRole === "cliente" || userRole === "vendedor") && user.email
+        ? {
+            email: user.email,
+            nombre: (user.user_metadata?.nombre as string | undefined) || "Usuario",
+          }
+        : null,
+    };
+  } catch {
+    return { loggedIn: false, role: null, currentUser: null };
+  }
+}
+
+function loadPortalAuthOnce(): Promise<PortalAuthSnapshot> {
+  if (!portalAuthSnapshot) portalAuthSnapshot = readPortalAuth();
+  return portalAuthSnapshot;
+}
+
 export function usePortalAuth(): PortalAuthState {
   const [portalAuthChecked, setPortalAuthChecked] = useState(false);
   const [portalLoggedIn, setPortalLoggedIn] = useState(false);
@@ -30,57 +75,14 @@ export function usePortalAuth(): PortalAuthState {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      const dev = getDevAuthFromDocument();
-      if (dev) {
-        if (!cancelled) {
-          const devRole = normalizeRole(dev.role);
-          setPortalLoggedIn(true);
-          setPortalAuthChecked(true);
-          setRole(devRole);
-          // Cliente y vendedor pueden presentar oferta / solicitar info en portal.
-          if (devRole === "cliente" || devRole === "vendedor") {
-            setCurrentUser({ email: dev.email, nombre: dev.nombre });
-          } else {
-            setCurrentUser(null);
-          }
-          setUserResolved(true);
-        }
-        return;
-      }
-      try {
-        const sb = createClient();
-        const { data: { user } } = await sb.auth.getUser();
-        if (cancelled) return;
-        setPortalLoggedIn(Boolean(user));
-        if (user) {
-          const userRole = normalizeRole(user.user_metadata?.role as string | undefined) ?? "cliente";
-          setRole(userRole);
-          if ((userRole === "cliente" || userRole === "vendedor") && user.email) {
-            setCurrentUser({
-              email: user.email,
-              nombre: (user.user_metadata?.nombre as string | undefined) || "Usuario",
-            });
-          } else {
-            setCurrentUser(null);
-          }
-        } else {
-          setRole(null);
-          setCurrentUser(null);
-        }
-      } catch {
-        if (!cancelled) {
-          setPortalLoggedIn(false);
-          setRole(null);
-          setCurrentUser(null);
-        }
-      } finally {
-        if (!cancelled) {
-          setPortalAuthChecked(true);
-          setUserResolved(true);
-        }
-      }
-    })();
+    loadPortalAuthOnce().then((snapshot) => {
+      if (cancelled) return;
+      setPortalLoggedIn(snapshot.loggedIn);
+      setRole(snapshot.role);
+      setCurrentUser(snapshot.currentUser);
+      setPortalAuthChecked(true);
+      setUserResolved(true);
+    });
     return () => { cancelled = true; };
   }, []);
 

@@ -23,7 +23,9 @@ import {
 import { OfertaDatosComprador } from "@/components/OfertaDatosComprador";
 import { enviarSolicitudInformacion } from "@/app/actions/email-info-request";
 import { usePortalAuth } from "@/hooks/usePortalAuth";
+import Image from "next/image";
 import { InteractiveMap } from "@/components/InteractiveMap";
+import { cardImageSrc, isOptimizableImageSrc } from "@/lib/portal-card-media";
 
 const BASE_SECTION_IDS = [
   "descripcion",
@@ -42,6 +44,49 @@ const SECTION_META: Record<(typeof BASE_SECTION_IDS)[number], string> = {
 interface PortalDetailClientProps {
   asset: Asset;
   siblings: Asset[];
+}
+
+function FichaHero({ asset }: { asset: Asset }) {
+  const src = cardImageSrc(asset);
+  const label = `${asset.pob}, ${asset.prov}`;
+  return (
+    <div className="relative mb-5 h-[320px] w-full overflow-hidden rounded-xl border border-border bg-cream2">
+      {src && isOptimizableImageSrc(src) ? (
+        <Image
+          src={src}
+          alt={label}
+          fill
+          priority
+          sizes="(max-width: 1024px) 100vw, 720px"
+          className="object-cover"
+        />
+      ) : src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt={label} width={960} height={320} className="h-[320px] w-full object-cover" />
+      ) : null}
+      <InteractiveMap
+        key={`map-${asset.id}-${asset.lat ?? "x"}-${asset.lng ?? "x"}`}
+        lat={asset.lat}
+        lng={asset.lng}
+        mapImageUrl={asset.map}
+        label={label}
+        transparentLoader={Boolean(src)}
+        className="absolute inset-0 h-[320px] w-full"
+      />
+    </div>
+  );
+}
+
+function FichaThumb({ asset }: { asset: Asset }) {
+  const src = cardImageSrc(asset);
+  return (
+    <div className="relative h-[80px] w-[120px] shrink-0 overflow-hidden rounded-md bg-cream2">
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" width={120} height={80} className="h-[80px] w-[120px] object-cover" />
+      ) : null}
+    </div>
+  );
 }
 
 export default function PortalDetailClient({ asset, siblings }: PortalDetailClientProps) {
@@ -172,14 +217,7 @@ export default function PortalDetailClient({ asset, siblings }: PortalDetailClie
           <div className="flex flex-col gap-6">
             {/* Description section */}
             <section id="descripcion" ref={el => { sectionRefs.current.descripcion = el; }}>
-              <InteractiveMap
-                key={`map-${asset.id}-${asset.lat ?? "x"}-${asset.lng ?? "x"}`}
-                lat={asset.lat}
-                lng={asset.lng}
-                mapImageUrl={asset.map}
-                label={`${asset.pob}, ${asset.prov}`}
-                className="mb-5 h-[320px] w-full rounded-xl border border-border"
-              />
+              <FichaHero asset={asset} />
 
               <div className="rounded-lg border border-border bg-white p-5 shadow-sm">
                 <SectionTitle>Descripción</SectionTitle>
@@ -273,13 +311,7 @@ export default function PortalDetailClient({ asset, siblings }: PortalDetailClie
                       const price = getPortalPriceDisplay(s);
                       const body = (
                         <>
-                          <InteractiveMap
-                            key={`map-${s.id}-${s.lat ?? "x"}-${s.lng ?? "x"}`}
-                            lat={s.lat}
-                            lng={s.lng}
-                            mapImageUrl={s.map}
-                            className="h-[80px] w-[120px] shrink-0 rounded-md"
-                          />
+                          <FichaThumb asset={s} />
                           <div className="flex min-w-0 flex-1 flex-col justify-center">
                             <div className="text-sm font-semibold text-navy group-hover:text-gold">
                               {s._current ? "Este inmueble · " : ""}

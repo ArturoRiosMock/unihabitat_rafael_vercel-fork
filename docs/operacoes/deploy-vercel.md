@@ -49,6 +49,10 @@ Staging ponta a ponta: [staging.md](staging.md).
 
 Supabase Auth redirect URLs devem incluir o domínio de produção. `APP_ORIGIN` evita magic links para `localhost` quando `NEXT_PUBLIC_APP_URL` ficou incorrecto no build.
 
+## Região das funções
+
+`vercel.json` fixa `regions: ["fra1"]` (Frankfurt). O tráfego é de Espanha; Frankfurt é a região Vercel mais próxima. **Confirmar contra a região do projeto Supabase de produção** antes de promover: se o Postgres estiver noutra região, o ganho de latência pode inverter-se. Não altera dados nem o comportamento visível.
+
 ## Middleware
 
 Edge middleware em `src/middleware.ts` — compatível com Vercel Edge por default.

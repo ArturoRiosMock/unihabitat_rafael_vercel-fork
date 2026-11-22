@@ -280,21 +280,33 @@ describe("categoría libre OCUPADO y columnas proceso/deuda", () => {
 });
 
 describe("páginas admin y portal", () => {
-  it.each([
-    ["admin", "admin/page.tsx"],
-    ["portal", "portal/page.tsx"],
-  ] as const)("/%s importa los mismos helpers de asset-filters", (_label, relPath) => {
-    const src = readFileSync(resolve(__dirname, "../app", relPath), "utf8");
-
+  it("el listado admin importa los helpers compartidos", () => {
+    const src = readFileSync(resolve(__dirname, "../app/admin/page.tsx"), "utf8");
     expect(src).toContain('@/lib/asset-filters');
     for (const symbol of SHARED_FILTER_SYMBOLS) {
-      expect(src, `${relPath} debe importar ${symbol}`).toContain(symbol);
+      expect(src, `admin/page.tsx debe importar ${symbol}`).toContain(symbol);
     }
   });
 
-  it("home usa asset-filters para handoff a /portal", () => {
-    const src = readFileSync(resolve(__dirname, "../app/page.tsx"), "utf8");
+  it("el listado de /portal filtra con los mismos helpers, en el servidor", () => {
+    const src = readFileSync(resolve(__dirname, "../lib/portal-listing.ts"), "utf8");
     expect(src).toContain('@/lib/asset-filters');
-    expect(src).toContain("buildAssetListFilterOptions");
+    for (const symbol of SHARED_FILTER_SYMBOLS) {
+      expect(src, `portal-listing.ts debe importar ${symbol}`).toContain(symbol);
+    }
+    const page = readFileSync(resolve(__dirname, "../app/portal/page.tsx"), "utf8");
+    expect(page).toContain("loadPortalListing");
+  });
+
+  it("home usa asset-filters para handoff a /portal", () => {
+    const listing = readFileSync(resolve(__dirname, "../lib/portal-listing.ts"), "utf8");
+    expect(listing).toContain('@/lib/asset-filters');
+    expect(listing).toContain("buildAssetListFilterOptions");
+    const home = readFileSync(resolve(__dirname, "../components/HomeClient.tsx"), "utf8");
+    expect(home).toContain('router.push(`/portal');
+    expect(home).toContain("cat");
+    expect(home).toContain("prov");
+    expect(home).toContain("pob");
+    expect(home).toContain("tipo");
   });
 });

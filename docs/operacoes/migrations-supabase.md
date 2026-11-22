@@ -28,6 +28,7 @@
 | `supabase/migrations/20261119e_propietario_contacto.sql` | Garante `propiedades.propietario` e `contacto` (mais telefone/email). O nome antigo fica em Propietario; Contacto vazio fica «—». Copia `assets.owner_*` só se a coluna da propriedade está vazia. Revoga o SELECT dessas colunas e de `excel_raw` a `anon`/`authenticated`. Idempotente. Staging; não produção neste passo |
 | `supabase/migrations/20261119f_ofertas_workflow_clientes.sql` | Estados `realizada` → `firmada`, `fecha_firma`, `estado_legacy`, `oferta_historial` e índice do agente só quando a oferta não tem comprador. Idempotente. Staging; não produção neste passo |
 | `supabase/migrations/20261119g_comprador_demanda_cruce.sql` | Demanda estruturada, oportunidades oferecidas (não repetir comprador+ativo) e resumo do lote. RLS admin / agente atribuído / comprador. Idempotente. Staging; não produção neste passo |
+| `supabase/migrations/20261122a_portal_listing_indexes.sql` | Índices de listagem pública (`pub` + data, província, município, tipologia, preço, coordenadas) e `(inmueble_id, categoria)`. Não altera dados. Idempotente |
 
 Situación não precisa de SQL: usa `propiedades.fase_interna`, criada em `supabase-migration-inmuebles-propiedades.sql`.
 | `supabase-migration-documentos-bucket.sql` | Bucket privado `documentos` + RLS de storage. As descargas usam `createSignedUrl` (não `getPublicUrl`) |

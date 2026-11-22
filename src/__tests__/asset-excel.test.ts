@@ -4,9 +4,9 @@ import type { Asset, Propiedad } from "@/lib/types";
 import {
   assetsExportFilename,
   assetsToExcelRows,
-  buildAssetsWorkbook,
   resolveAssetsForExport,
 } from "@/lib/asset-excel";
+import { buildAssetsWorkbook } from "@/lib/asset-excel-workbook";
 
 function propiedad(partial: Partial<Propiedad> = {}): Propiedad {
   return {

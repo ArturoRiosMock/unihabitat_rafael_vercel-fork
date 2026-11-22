@@ -17,7 +17,7 @@ import { deleteAssetsByIds, toggleAssetPub } from "@/app/actions/assets";
 import { isAdmin } from "@/lib/auth-helpers";
 import { getCategoria, getFaseInterna, getFaseC, getActivoId } from "@/lib/utils";
 import { compareByPublicationDate, publicationListLabel } from "@/lib/asset-publication";
-import { downloadAssetsWorkbook, resolveAssetsForExport } from "@/lib/asset-excel";
+import { resolveAssetsForExport } from "@/lib/asset-excel";
 import { stripPropiedadPii } from "@/lib/supabase/db";
 import { toast } from "@/lib/toast";
 
@@ -219,7 +219,9 @@ export default function ActivosPage() {
           ...asset,
           propiedades: asset.propiedades.map(stripPropiedadPii),
         }));
-    downloadAssetsWorkbook(rows);
+    void import("@/lib/asset-excel-workbook").then(({ downloadAssetsWorkbook }) => {
+      downloadAssetsWorkbook(rows);
+    });
   };
 
   const handleDeleteSelected = async () => {

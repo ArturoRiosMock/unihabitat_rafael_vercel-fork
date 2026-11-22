@@ -231,7 +231,7 @@ describe("otros listados que pierden filtros al navegar", () => {
   });
 
   it("las tarjetas del portal y el popup del mapa abren la ficha en otra pestaña", () => {
-    const portal = sliceAround(readSrc("app/portal/page.tsx"), "href={assetPortalHref(a)}", 4500);
+    const portal = sliceAround(readSrc("components/PortalListing.tsx"), "href={assetPortalHref(asset)}", 4500);
     expect(portal).toContain('target="_blank"');
     expect(portal).toContain('rel="noopener noreferrer"');
     expect(portal).toContain("se abre en una pestaña nueva");

@@ -12,7 +12,8 @@ import { canViewSection } from "@/lib/auth-helpers";
 import { isAdminSectionAllowed, shouldRedirectVendorToActivos } from "@/lib/admin-access";
 import { hrefToSection } from "@/lib/permissions";
 import type { SectionId } from "@/lib/permissions";
-import { useApp } from "@/lib/context";
+import { useApp, useEnsureCatalog } from "@/lib/context";
+import { catalogNeedsForPath } from "@/lib/catalog-scope";
 import { AssetsErrorBanner } from "@/components/AssetsErrorBanner";
 import { isStagingGuideEnabled } from "@/lib/staging-guide";
 
@@ -48,6 +49,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const router = useRouter();
   const { session, sessionResolved, permissions } = useApp();
+  useEnsureCatalog(catalogNeedsForPath(pathname));
   const showStagingGuide = isStagingGuideEnabled();
 
   const isActive = (href: string) => {

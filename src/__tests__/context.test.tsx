@@ -58,13 +58,22 @@ describe("AppProvider — estado inicial y carga de activos", () => {
     backfillMissingMapsMock.mockReset();
   });
 
+  it("no descarga activos hasta que una pantalla de admin lo pide", async () => {
+    await act(async () => {
+      render(<AppProvider><Probe /></AppProvider>);
+    });
+    expect(screen.getByTestId("count").textContent).toBe("0");
+    expect(screen.getByTestId("loading").textContent).toBe("false");
+    expect(fetchAssetsMock).not.toHaveBeenCalled();
+  });
+
   it("NO siembra los 6 mocks: la lista arranca vacía y `assetsLoading=true`", async () => {
     await step("simular fetch lento", async () => {
       fetchAssetsMock.mockImplementation(() => new Promise(() => {/* nunca resuelve */}));
     });
 
     await step("renderizar el provider", async () => {
-      render(<AppProvider><Probe /></AppProvider>);
+      render(<AppProvider autoload><Probe /></AppProvider>);
     });
 
     expect(screen.getByTestId("count").textContent).toBe("0");
@@ -79,7 +88,7 @@ describe("AppProvider — estado inicial y carga de activos", () => {
     ]);
 
     await act(async () => {
-      render(<AppProvider><Probe /></AppProvider>);
+      render(<AppProvider autoload><Probe /></AppProvider>);
     });
 
     await waitFor(() => {
@@ -97,7 +106,7 @@ describe("AppProvider — estado inicial y carga de activos", () => {
     fetchAssetsMock.mockRejectedValueOnce(new Error("RLS denied"));
 
     await act(async () => {
-      render(<AppProvider><Probe /></AppProvider>);
+      render(<AppProvider autoload><Probe /></AppProvider>);
     });
 
     await waitFor(() => {

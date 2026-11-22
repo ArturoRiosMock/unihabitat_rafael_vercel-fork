@@ -5,7 +5,9 @@ import {
   rowToAsset, rowToAssetPublic, assetToRow,
   rowToPropiedad, rowToPropiedadPublic, propiedadToRow,
   mergeExcelRawMaps, PROPIEDAD_PUBLIC_SELECT,
+  ASSET_LIST_SELECT, PROPIEDAD_ADMIN_LIST_SELECT,
 } from "@/lib/supabase/db";
+import { revalidatePublicPortal } from "@/lib/portal-revalidate";
 import type { Asset, Propiedad } from "@/lib/types";
 import { buildStaticMapUrl } from "@/lib/catastro/geoapify";
 import {
@@ -54,7 +56,7 @@ export async function fetchAssets(): Promise<Asset[]> {
   const supabase = await createServiceClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rows = await fetchAllPaginated<any>("fetchAssets", () =>
-    supabase.from("assets").select("*").order("created_at", { ascending: false }),
+    supabase.from("assets").select(ASSET_LIST_SELECT).order("created_at", { ascending: false }),
   );
   return rows.map(rowToAsset);
 }
@@ -304,10 +306,11 @@ export async function fetchAssetByIdForAdmin(id: string): Promise<Asset | null> 
 export async function fetchPropiedades(): Promise<Propiedad[]> {
   const supabase = await createServiceClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rows = await fetchAllPaginated<any>("fetchPropiedades", () =>
-    supabase.from("propiedades").select("*").order("created_at", { ascending: false }),
-  );
   const readPii = await sessionCanReadPropiedadPii();
+  const columns = readPii ? PROPIEDAD_ADMIN_LIST_SELECT : PROPIEDAD_PUBLIC_SELECT;
+  const rows = await fetchAllPaginated<any>("fetchPropiedades", () =>
+    supabase.from("propiedades").select(columns).order("created_at", { ascending: false }),
+  );
   return rows.map(readPii ? rowToPropiedad : rowToPropiedadPublic);
 }
 
@@ -498,6 +501,7 @@ export async function upsertAssets(assets: Asset[]): Promise<UpsertAssetsResult>
     }
   }
 
+  if (inserted + updated > 0) revalidatePublicPortal();
   return { inserted, updated, errors, duplicatesMerged };
 }
 
@@ -592,6 +596,7 @@ export async function upsertPropiedades(propiedades: Propiedad[]): Promise<Upser
     }
   }
 
+  if (inserted + updated > 0) revalidatePublicPortal();
   return { inserted, updated, errors, duplicatesMerged };
 }
 
@@ -604,7 +609,7 @@ export async function toggleAssetPub(id: string): Promise<boolean> {
   await requireAssetAccess(session, id);
   const supabase = await createServiceClient();
   const { data, error } = await supabase
-    .from("assets").select("pub").eq("id", id).maybeSingle();
+    .from("assets").select("pub, public_slug").eq("id", id).maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Inmueble no encontrado");
   const newPub = !data.pub;
@@ -619,6 +624,7 @@ export async function toggleAssetPub(id: string): Promise<boolean> {
     updateErr = retry.error;
   }
   if (updateErr) throw new Error(updateErr.message);
+  revalidatePublicPortal({ id, slug: data.public_slug as string | null });
 
   // Al publicar, recalcular matching y notificar compradores top.
   if (newPub) {
@@ -643,6 +649,7 @@ export async function updateAssetFields(
   const supabase = await createServiceClient();
   const { error } = await supabase.from("assets").update(fields).eq("id", id);
   if (error) throw new Error(error.message);
+  revalidatePublicPortal({ id });
 }
 
 /** Actualiza campos de una fila en `propiedades` (fase_interna, proceso, etc.). */
@@ -674,6 +681,7 @@ export async function updatePropiedadFields(
 
   const { error } = await supabase.from("propiedades").update(payload).eq("id", propiedadId);
   if (error) throw new Error(error.message);
+  revalidatePublicPortal();
 }
 
 const MAX_EXCEL_RAW_JSON_CHARS = 500_000;
@@ -718,6 +726,7 @@ export async function updatePropiedadExcelRaw(
     .update({ excel_raw: validated, ...canonical })
     .eq("id", propiedadId);
   if (error) throw new Error(error.message);
+  revalidatePublicPortal();
 }
 
 export async function deleteAssetsByIds(ids: string[]): Promise<{ deleted: number }> {
@@ -728,6 +737,7 @@ export async function deleteAssetsByIds(ids: string[]): Promise<{ deleted: numbe
   const { data, error } = await supabase
     .from("assets").delete().in("id", unique).select("id");
   if (error) throw new Error(error.message);
+  if ((data?.length ?? 0) > 0) revalidatePublicPortal();
   return { deleted: data?.length ?? 0 };
 }
 

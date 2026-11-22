@@ -164,6 +164,47 @@ export function rowToPropiedadPublic(r: any): Propiedad {
  * Columnas que anon/authenticated pueden leer tras la migración
  * 20261119e. No incluye propietario, contacto, teléfono, email ni excel_raw.
  */
+/** Columnas del listado admin/portal. Sin excel_raw ni bloques adm_*. */
+export const ASSET_LIST_SELECT = [
+  "id",
+  "referencia",
+  "public_slug",
+  "prov",
+  "pob",
+  "cp",
+  "addr",
+  "tip",
+  "tip_c",
+  "precio",
+  "fav",
+  "sqm",
+  "tvia",
+  "nvia",
+  "num",
+  "esc",
+  "pla",
+  "pta",
+  "map",
+  "lat",
+  "lng",
+  "clase",
+  "uso",
+  "bien",
+  "sup_c",
+  "sup_g",
+  "coef",
+  "ccaa",
+  "full_addr",
+  "descr",
+  "pub",
+  "published_at",
+  "age",
+  "created_at",
+].join(",");
+
+/** Ficha pública: mismas columnas visibles, sin PII de propietario. */
+export const ASSET_PUBLIC_SELECT = ASSET_LIST_SELECT;
+
 export const PROPIEDAD_PUBLIC_SELECT = [
   "id",
   "inmueble_id",
@@ -198,6 +239,30 @@ export const PROPIEDAD_PUBLIC_SELECT = [
   "registralmente_ok",
   "created_at",
   "updated_at",
+].join(",");
+
+/** Listado admin: ficha pública + contacto, sin excel_raw. */
+export const PROPIEDAD_ADMIN_LIST_SELECT = [
+  PROPIEDAD_PUBLIC_SELECT,
+  "propietario",
+  "contacto",
+  "telefono",
+  "mail",
+].join(",");
+
+/** Tarjeta del portal: solo lo que pinta el listado y el filtro. */
+export const PROPIEDAD_CARD_SELECT = [
+  "id",
+  "inmueble_id",
+  "activo_id",
+  "categoria",
+  "deuda",
+  "precio_publicacion",
+  "collateral_id",
+  "id_prinex",
+  "id_property",
+  "main_local_ccc14",
+  "portfolio",
 ].join(",");
 
 export function propiedadToRow(p: Propiedad) {

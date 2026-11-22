@@ -3,41 +3,49 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { MapPin } from "lucide-react";
-import type { Asset } from "@/lib/types";
-import { getPortalPriceDisplay, shortAddr } from "@/lib/utils";
-import { assetPortalHref } from "@/lib/public-slug";
+import { clusterMapPoints } from "@/lib/map-cluster";
+import type { PortalMapPoint } from "@/lib/portal-listing";
 
 type PortalAssetsMapProps = {
-  assets: Asset[];
+  points: PortalMapPoint[];
   className?: string;
 };
 
 /**
- * Mapa del listado portal: un marker por activo con coordenadas.
- * Usa Leaflet existente (sin plugin cluster).
+ * Mapa del listado. Leaflet entra solo cuando el contenedor es visible
+ * (el listado lo monta al pulsar «Mapa»). Los marcadores se agrupan por zoom.
  */
-export function PortalAssetsMap({ assets, className = "" }: PortalAssetsMapProps) {
+export function PortalAssetsMap({ points, className = "" }: PortalAssetsMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState(false);
-
-  const points = assets
-    .map((a) => {
-      const lat = typeof a.lat === "number" ? a.lat : Number(a.lat);
-      const lng = typeof a.lng === "number" ? a.lng : Number(a.lng);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-      return { asset: a, lat, lng };
-    })
-    .filter((p): p is { asset: Asset; lat: number; lng: number } => p != null);
+  const [zoom, setZoom] = useState(6);
 
   useEffect(() => {
-    if (!containerRef.current || points.length === 0) {
-      setReady(false);
+    const node = containerRef.current;
+    if (!node) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setVisible(true);
       return;
     }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
+  useEffect(() => {
+    if (!visible || !containerRef.current || points.length === 0) return;
     let cancelled = false;
 
     (async () => {
@@ -57,34 +65,45 @@ export function PortalAssetsMap({ assets, className = "" }: PortalAssetsMapProps
           attribution: "&copy; OpenStreetMap",
           maxZoom: 19,
         }).addTo(map);
+        const markers = L.layerGroup().addTo(map);
 
-        const icon = L.divIcon({
-          className: "",
-          html: `<div style="width:14px;height:14px;border-radius:50%;background:#0d2a4a;border:2px solid #c9a84c;box-shadow:0 1px 4px rgba(0,0,0,.35)"></div>`,
-          iconSize: [14, 14],
-          iconAnchor: [7, 7],
-        });
+        const draw = () => {
+          markers.clearLayers();
+          const currentZoom = map.getZoom();
+          setZoom(currentZoom);
+          const clusters = clusterMapPoints(points, currentZoom);
+          for (const cluster of clusters) {
+            const single = cluster.count === 1 ? cluster.items[0] : null;
+            const icon = L.divIcon({
+              className: "",
+              html: single
+                ? `<div style="width:14px;height:14px;border-radius:50%;background:#0d2a4a;border:2px solid #c9a84c;box-shadow:0 1px 4px rgba(0,0,0,.35)"></div>`
+                : `<div style="min-width:28px;height:28px;padding:0 6px;border-radius:14px;background:#0d2a4a;color:#fff;border:2px solid #c9a84c;display:flex;align-items:center;justify-content:center;font:700 11px/1 system-ui,sans-serif">${cluster.count}</div>`,
+              iconSize: single ? [14, 14] : [28, 28],
+              iconAnchor: single ? [7, 7] : [14, 14],
+            });
+            const marker = L.marker([cluster.lat, cluster.lng], { icon }).addTo(markers);
+            if (single) {
+              marker.bindPopup(
+                `<div style="font:12px/1.4 system-ui,sans-serif;min-width:140px">
+                  <strong>${escapeHtml(single.title)}</strong><br/>
+                  <span style="color:#666">${escapeHtml(single.priceLabel)}: ${escapeHtml(single.priceValue)}</span><br/>
+                  <a href="${escapeHtml(single.href)}" target="_blank" rel="noopener noreferrer" style="color:#0d2a4a;font-weight:600">Ver ficha →</a>
+                </div>`,
+              );
+            } else {
+              marker.on("click", () => {
+                map.setView([cluster.lat, cluster.lng], Math.min(currentZoom + 2, 16));
+              });
+            }
+          }
+        };
 
-        const bounds = L.latLngBounds([]);
-        for (const p of points) {
-          const price = getPortalPriceDisplay(p.asset);
-          const marker = L.marker([p.lat, p.lng], { icon }).addTo(map);
-          marker.bindPopup(
-            `<div style="font:12px/1.4 system-ui,sans-serif;min-width:140px">
-              <strong>${escapeHtml(shortAddr(p.asset) || p.asset.pob || p.asset.id)}</strong><br/>
-              <span style="color:#666">${escapeHtml(price.label)}: ${escapeHtml(price.value)}</span><br/>
-              <a href="${assetPortalHref(p.asset)}" target="_blank" rel="noopener noreferrer" title="Se abre en una pestaña nueva" style="color:#0d2a4a;font-weight:600">Ver ficha →</a>
-            </div>`,
-          );
-          bounds.extend([p.lat, p.lng]);
-        }
-
-        if (points.length === 1) {
-          map.setView([points[0].lat, points[0].lng], 12);
-        } else {
-          map.fitBounds(bounds.pad(0.15));
-        }
-
+        const bounds = L.latLngBounds(points.map((point) => [point.lat, point.lng] as [number, number]));
+        if (points.length === 1) map.setView([points[0].lat, points[0].lng], 12);
+        else map.fitBounds(bounds.pad(0.15));
+        draw();
+        map.on("zoomend", draw);
         setReady(true);
         setError(false);
       } catch {
@@ -99,13 +118,11 @@ export function PortalAssetsMap({ assets, className = "" }: PortalAssetsMapProps
         mapRef.current = null;
       }
     };
-    // points identity via ids+coords
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [points.map((p) => `${p.asset.id}:${p.lat},${p.lng}`).join("|")]);
+  }, [visible, points]);
 
   if (points.length === 0) {
     return (
-      <div className={`flex flex-col items-center justify-center rounded-xl border border-border bg-white py-16 text-center ${className}`}>
+      <div className={`flex h-[480px] flex-col items-center justify-center rounded-xl border border-border bg-white text-center ${className}`}>
         <MapPin size={32} className="text-border" />
         <p className="mt-3 text-sm font-medium text-navy">Sin coordenadas en estos resultados</p>
         <p className="mt-1 text-xs text-muted">Prueba la vista lista o ajusta los filtros</p>
@@ -123,6 +140,7 @@ export function PortalAssetsMap({ assets, className = "" }: PortalAssetsMapProps
       )}
       <div className="border-t border-border px-3 py-2 text-[11px] text-muted">
         {points.length} activo{points.length === 1 ? "" : "s"} en mapa
+        {zoom < 13 ? " · agrupados" : ""}
         {" · "}
         <Link href="/portal" className="text-gold hover:underline">
           Ver lista
@@ -132,8 +150,8 @@ export function PortalAssetsMap({ assets, className = "" }: PortalAssetsMapProps
   );
 }
 
-function escapeHtml(s: string): string {
-  return s
+function escapeHtml(value: string): string {
+  return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")

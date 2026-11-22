@@ -42,7 +42,7 @@ Tests live in `src/__tests__/`. Standalone helpers: `catastro.py`, `scripts/` (`
 ### Data flow
 
 1. **Server actions** (`src/app/actions/`) — DB mutations. The only route handler is the cron `GET /api/cron/reasignar-compradores` (`CRON_SECRET`), which unassigns buyers after 90 days without agent activity. Listing buyers runs the same check.
-2. **React Context** (`src/lib/context.tsx`) — client state with `refresh*` methods
+2. **React Context** (`src/lib/context.tsx`) — session once per load. Asset, buyer and seller lists load only from the admin screen that needs them (`catalogNeedsForPath`). The public portal does not use this catalog.
 3. **Row mappers** (`src/lib/supabase/db.ts`) — snake_case DB ↔ camelCase models
 
 ### Supabase clients

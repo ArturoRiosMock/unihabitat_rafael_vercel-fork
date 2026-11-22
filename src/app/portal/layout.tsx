@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Lock } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { SiteFooter } from "@/components/SiteFooter";
 import { BrandMark } from "@/components/BrandMark";
-import { createClient } from "@/lib/supabase/client";
+import { useApp } from "@/lib/context";
 
 function initialsOf(nombre: string): string {
   return (
@@ -26,45 +25,16 @@ function firstNameOf(nombre: string, fallback: string): string {
 }
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
-  const [userId, setUserId] = useState<string | undefined>(undefined);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userNombre, setUserNombre] = useState<string>("");
-  const [userEmail, setUserEmail] = useState<string>("");
-  const [userRole, setUserRole] = useState<string>("cliente");
+  const { session, sessionResolved } = useApp();
+  const isLoggedIn = sessionResolved && session != null;
+  const userNombre = session?.nombre ?? "";
+  const userEmail = session?.email ?? "";
+  const userRole = session?.role ?? "cliente";
+  const userId = session?.userId;
 
   // Solo mostramos el bloque de identidad cuando el usuario es cliente/comprador.
   const showClientInfo =
     isLoggedIn && userRole !== "admin" && userRole !== "vendedor";
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const devCookie = document.cookie.split("; ").find(c => c.startsWith("dev-auth="));
-      if (devCookie) {
-        try {
-          const dev = JSON.parse(decodeURIComponent(devCookie.split("=").slice(1).join("=")));
-          if (cancelled) return;
-          setUserId(dev.user_id ?? dev.userId ?? undefined);
-          setUserNombre(dev.nombre ?? dev.email ?? "Usuario");
-          setUserEmail(dev.email ?? "");
-          setUserRole(dev.role ?? "cliente");
-          setIsLoggedIn(true);
-          return;
-        } catch { /* fallthrough — Supabase */ }
-      }
-      try {
-        const sb = createClient();
-        const { data: { user } } = await sb.auth.getUser();
-        if (cancelled || !user?.email) return;
-        setUserId(user.id);
-        setUserEmail(user.email);
-        setUserNombre((user.user_metadata?.nombre as string | undefined) || user.email);
-        setUserRole((user.user_metadata?.role as string | undefined) || "cliente");
-        setIsLoggedIn(true);
-      } catch { /* sin sesión */ }
-    })();
-    return () => { cancelled = true; };
-  }, []);
   return (
     <div className="flex min-h-screen flex-col bg-cream2">
       {/* ── Header ── */}
